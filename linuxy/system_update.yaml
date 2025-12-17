@@ -8,8 +8,9 @@
       apt:
         update_cache: yes
         upgrade: safe
-        autoremove: yes
-        autoclean: yes
+        autoremove: true
+        autoclean: true
+        clean: true
         dpkg_options: 'force-confold,force-confdef'
       register: upgradeapt
     - name: Wysyłanie powiadomienia na Discord
