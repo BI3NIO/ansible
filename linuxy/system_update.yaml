@@ -1,0 +1,26 @@
+---
+- name: Aktualizacja systemu
+  hosts: linux_srvrs
+  become: yes
+
+  vars:
+    discord_webhook_url: https://discord.com/api/webhooks/1450900992336859249/OqoegUvwvRoxfxtlx-BbwVIt5sHxfivcz_a7Tu0SmLEGCpkBJFjCKb8NysbA74EsNolQ
+
+  tasks:
+    - name: Aktualizacja pakietów
+    block:
+      apt:
+        update_cache: yes
+        upgrade: safe
+        autoremove: yes
+        autoclean: yes
+
+    rescue:
+      - name: Wysyłanie powiadomienia na Discord
+        uri:
+          url: "{{ discord_webhook_url }}"
+          method: POST
+          body_format: json
+          body:
+            content: "Aktualizacja pakietów nie powiodła się"
+          status_code: 204
