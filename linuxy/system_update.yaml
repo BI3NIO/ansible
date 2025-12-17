@@ -15,12 +15,12 @@
           autoremove: yes
           autoclean: yes
 
-    rescue:
-      - name: Wysyłanie powiadomienia na Discord
-        uri:
-          url: "{{ discord_webhook_url }}"
-          method: POST
-          body_format: json
-          body:
-            content: "Aktualizacja pakietów nie powiodła się"
-          status_code: 204
+      rescue:
+        - name: Wysyłanie powiadomienia na Discord
+          uri:
+            url: "{{ discord_webhook_url }}"
+            method: POST
+            body_format: json
+            body:
+              content: "Aktualizacja pakietów nie powiodła się"
+            status_code: 204
