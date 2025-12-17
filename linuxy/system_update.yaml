@@ -1,10 +1,6 @@
----
 - name: Aktualizacja systemu
   hosts: linux_srvrs
   become: yes
-
-  vars:
-    discord_webhook_url: https://discord.com/api/webhooks/1450900992336859249/OqoegUvwvRoxfxtlx-BbwVIt5sHxfivcz_a7Tu0SmLEGCpkBJFjCKb8NysbA74EsNolQ
 
   tasks:
     - name: Aktualizacja pakietów
@@ -16,9 +12,9 @@
         autoclean: yes
         dpkg_options: 'force-confold,force-confdef'
       register: upgradeapt
-     - name: Wysyłanie powiadomienia na Discord
-       community.general.discord:
-         webhook_id: 1450900992336859249
-         webhook_token: "OqoegUvwvRoxfxtlx-BbwVIt5sHxfivcz_a7Tu0SmLEGCpkBJFjCKb8NysbA74EsNolQ"
-         username: Semaphore
-         content: "Aktualizacja się powiodła na {{ ansible_hostname }}: {{ upgradeapt.stdout_lines }}"
+    - name: Wysyłanie powiadomienia na Discord
+      community.general.discord:
+        webhook_id: 1450900992336859249
+        webhook_token: "OqoegUvwvRoxfxtlx-BbwVIt5sHxfivcz_a7Tu0SmLEGCpkBJFjCKb8NysbA74EsNolQ"
+        username: Semaphore
+        content: "Aktualizacja się powiodła na {{ ansible_hostname }}: {{ upgradeapt.stdout_lines }}"
