@@ -7,7 +7,7 @@
       block:
         - name: Wykonywanie aktualizacji
           apt:
-            update_cache: ye  # Celowo zepsute do testu
+            update_cache: yes
             upgrade: safe
             autoremove: true
             autoclean: true
@@ -32,5 +32,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            # Wyrzuciłem upgradeapt.stdout_lines, żeby nie wywalało błędu braku zmiennej
             content: "❌ Błąd aktualizacji na: {{ inventory_hostname }} ({{ ansible_host }})"
