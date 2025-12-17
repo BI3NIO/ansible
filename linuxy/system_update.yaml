@@ -8,12 +8,12 @@
 
   tasks:
     - name: Aktualizacja pakietów
-    block:
-      apt:
-        update_cache: yes
-        upgrade: safe
-        autoremove: yes
-        autoclean: yes
+      block:
+        apt:
+          update_cache: yes
+          upgrade: safe
+          autoremove: yes
+          autoclean: yes
 
     rescue:
       - name: Wysyłanie powiadomienia na Discord
