@@ -31,4 +31,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "Aktualizacja się nie powiodła na {{ inventory_hostname }}: {{ upgradeapt.stdout_lines }}"
+            content: "Aktualizacja się nie powiodła na {{ ansible_hostname }}: {{ upgradeapt.stdout_lines }}"
