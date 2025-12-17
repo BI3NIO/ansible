@@ -8,7 +8,7 @@
       block:
         - name: Wykonywanie aktualizacji
           apt:
-            update_cache: yes
+            update_cache: ye
             upgrade: safe
             autoremove: true
             autoclean: true
