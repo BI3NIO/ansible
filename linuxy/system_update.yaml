@@ -4,16 +4,17 @@
 
   tasks:
     - name: Aktualizacja pakietów
-      environment: "DEBIAN_FRONTEND: noninteractive"
       block:
         - name: Wykonywanie aktualizacji
           apt:
-            update_cache: ye
+            update_cache: ye  # Celowo zepsute do testu
             upgrade: safe
             autoremove: true
             autoclean: true
             clean: true
             dpkg_options: 'force-confold,force-confdef'
+          environment:
+            DEBIAN_FRONTEND: noninteractive
           register: upgradeapt
         
       rescue:
@@ -31,4 +32,5 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "Aktualizacja się nie powiodła na {{ ansible_hostname }}: {{ upgradeapt.stdout_lines }}"
+            # Wyrzuciłem upgradeapt.stdout_lines, żeby nie wywalało błędu braku zmiennej
+            content: "❌ Błąd aktualizacji na: {{ inventory_hostname }} ({{ ansible_host }})"
