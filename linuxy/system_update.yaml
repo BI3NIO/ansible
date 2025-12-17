@@ -8,19 +8,17 @@
 
   tasks:
     - name: Aktualizacja pakietów
-      block:
-        apt:
-          update_cache: yes
-          upgrade: safe
-          autoremove: yes
-          autoclean: yes
-
-      rescue:
-        - name: Wysyłanie powiadomienia na Discord
-          uri:
-            url: "{{ discord_webhook_url }}"
-            method: POST
-            body_format: json
-            body:
-              content: "Aktualizacja pakietów nie powiodła się"
-            status_code: 204
+      environment: "DEBIAN_FRONTEND: noninteractive"
+      apt:
+        update_cache: yes
+        upgrade: safe
+        autoremove: yes
+        autoclean: yes
+        dpkg_options: 'force-confold,force-confdef'
+      register: upgradeapt
+     - name: Wysyłanie powiadomienia na Discord
+       community.general.discord:
+         webhook_id: 1450900992336859249
+         webhook_token: "OqoegUvwvRoxfxtlx-BbwVIt5sHxfivcz_a7Tu0SmLEGCpkBJFjCKb8NysbA74EsNolQ"
+         username: Semaphore
+         content: "Aktualizacja się powiodła na {{ ansible_hostname }}: {{ upgradeapt.stdout_lines }}"
