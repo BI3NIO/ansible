@@ -52,6 +52,14 @@
       shell: "./AdGuardHome -s install -w /adguardhome"
       args:
         chdir: /adguardhome
+      register: service_install
+      failed_when: false
+
+    - name: Sprawdzenie czy AdGuard działa
+      service:
+        name: AdGuardHome
+        state: started
+        enabled: yes
 
     - name: Start AdGuarda z nowej lokalizacji
       service:
