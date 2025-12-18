@@ -34,12 +34,12 @@
         dest: /tmp/install_agh.sh
         mode: '0755'
 
-    - name: Instalacja AdGuarda
+    - name: Instalacja AdGuarda (standardowa)
       shell: "/tmp/install_agh.sh"
       ignore_errors: yes
 
     - name: Zatrzymanie AdGuarda przed migracją
-      systemctl:
+      service:
         name: AdGuardHome
         state: stopped
 
@@ -54,7 +54,7 @@
         chdir: /adguardhome
 
     - name: Start AdGuarda z nowej lokalizacji
-      systemctl:
+      service:
         name: AdGuardHome
         state: started
         enabled: yes
