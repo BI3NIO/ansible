@@ -49,7 +49,7 @@
         creates: /adguardhome/AdGuardHome
 
     - name: Reinstalacja serwisu w nowej lokalizacji
-      shell: "./AdGuardHome -s install -workDir /adguardhome"
+      shell: "./AdGuardHome -s install -w /adguardhome"
       args:
         chdir: /adguardhome
 
