@@ -2,15 +2,12 @@
 - name: Instalacja i Konfiguracja AdGuard Home dla AGH_Bieniek
   hosts: agh
   become: yes
-  vars:
-    disk_device1: "/dev/sdb"
-    disk_device2: "/dev/sdc"
 
   tasks:
     - name: Tworzenie Physical Volume
       lvg:
         vg: adg_vg
-        pvs: "{{ disk_device1 }}, {{ disk_device2 }}"
+        pvs: /dev/sdb,/dev/sdc
 
     - name: Tworzenie Logical Volume z RAID1
       lvol:
