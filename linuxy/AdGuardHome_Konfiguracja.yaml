@@ -35,9 +35,26 @@
         mode: '0755'
 
     - name: Instalacja do folderu /adguardhome
-      shell: "/tmp/install_agh.sh -v -d /adguardhome"
+      shell: "/tmp/install_agh.sh"
+
+    - name: Zatrzymanie AdGuarda, żeby go przenieść
+      systemctl:
+        name: AdGuardHome
+        state: stopped
+
+    - name: Przeniesienie plików do woluminu RAID1
+      shell: "cp -r /opt/AdGuardHome/* /adguardhome/"
+
+    - name: Reinstalacja serwisu
+      shell: "/adguardhome/AdGuardHome -s install -workDir /adguardhome"
       args:
-        creates: /adguardhome/AdGuardHome/AdGuardHome
+        chdir: /adguardhome
+
+    - name: Start AdGuarda z nowej lokalizacji
+      systemctl:
+        name: AdGuardHome
+        state: started
+        enabled: yes
 
     - name: Instalujacja UFW
       apt:
