@@ -4,7 +4,7 @@
   become: yes
 
   tasks:
-    - name: Tworzenie Physical Volume
+    - name: Tworzenie Physical Volume i VG
       lvg:
         vg: adg_vg
         pvs: /dev/sdb,/dev/sdc
@@ -34,19 +34,22 @@
         dest: /tmp/install_agh.sh
         mode: '0755'
 
-    - name: Instalacja do folderu /adguardhome
+    - name: Instalacja AdGuarda
       shell: "/tmp/install_agh.sh"
+      ignore_errors: yes
 
-    - name: Zatrzymanie AdGuarda, żeby go przenieść
+    - name: Zatrzymanie AdGuarda przed migracją
       systemctl:
         name: AdGuardHome
         state: stopped
 
     - name: Przeniesienie plików do woluminu RAID1
       shell: "cp -r /opt/AdGuardHome/* /adguardhome/"
+      args:
+        creates: /adguardhome/AdGuardHome
 
-    - name: Reinstalacja serwisu
-      shell: "/adguardhome/AdGuardHome -s install -workDir /adguardhome"
+    - name: Reinstalacja serwisu w nowej lokalizacji
+      shell: "./AdGuardHome -s install -workDir /adguardhome"
       args:
         chdir: /adguardhome
 
@@ -56,34 +59,34 @@
         state: started
         enabled: yes
 
-    - name: Instalujacja UFW
+    - name: Instalacja UFW
       apt:
         name: ufw
         state: present
         update_cache: yes
 
-    - name: Blokowanie wszystkiego co wchodzi do serwera
+    - name: Blokowanie ruchu przychodzącego
       ufw:
         direction: incoming
         policy: deny
 
-    - name: Zezwalanie SSH
+    - name: Zezwalanie na SSH
       ufw:
         rule: allow
         port: '22'
         proto: tcp
 
-    - name: Zezwalanie AdGuard Home
+    - name: Zezwalanie na porty AdGuard Home
       ufw:
         rule: allow
         port: "{{ item }}"
         proto: any
       loop:
-        - '3000' 
-        - '80'   
-        - '443'  
-        - '53'   
+        - '3000'
+        - '80'
+        - '443'
+        - '53'
 
-    - name: Autostart Firewalla
+    - name: Aktywacja Firewalla na starcie
       ufw:
         state: enabled
