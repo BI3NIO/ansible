@@ -1,0 +1,74 @@
+---
+- name: Instalacja i Konfiguracja AdGuard Home dla AGH_Bieniek
+  hosts: agh
+  become: yes
+  vars:
+    disk_device: "/dev/sdb"
+
+  tasks:
+    - name: Tworzenie Physical Volume
+      lvg:
+        vg: adg_vg
+        pvs: "{{ disk_device }}"
+
+    - name: Tworzenie Logical Volume z RAID1
+      lvol:
+        vg: adg_vg
+        lv: adg_lv
+        size: 100%FREE
+        opts: "--type raid1"
+
+    - name: Formatowanie na system plików ext4
+      filesystem:
+        fstype: ext4
+        dev: /dev/adg_vg/adg_lv
+
+    - name: Tworzenie folderu i montowanie nowego dysku
+      mount:
+        path: /adguardhome
+        src: /dev/adg_vg/adg_lv
+        fstype: ext4
+        state: mounted
+
+    - name: Pobieranie skryptu instalacyjnego AdGuarda
+      get_url:
+        url: https://raw.githubusercontent.com/AdguardTeam/AdGuardHome/master/scripts/install.sh
+        dest: /tmp/install_agh.sh
+        mode: '0755'
+
+    - name: Instalacja do folderu /adguardhome
+      shell: "/tmp/install_agh.sh -v -d /adguardhome"
+      args:
+        creates: /adguardhome/AdGuardHome/AdGuardHome
+
+    - name: Instalujacja UFW
+      apt:
+        name: ufw
+        state: present
+        update_cache: yes
+
+    - name: Blokowanie wszystkiego co wchodzi do serwera
+      ufw:
+        direction: incoming
+        policy: deny
+
+    - name: Zezwalanie SSH
+      ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+
+    - name: Zezwalanie AdGuard Home
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: any
+      loop:
+        - '3000' 
+        - '80'   
+        - '443'  
+        - '53'   
+
+    - name: Autostart Firewalla
+      ufw:
+        state: enabled
