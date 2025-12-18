@@ -4,7 +4,7 @@
   become: yes
   vars:
     disk_device1: "/dev/sdb"
-    disk_device2: "dev/sdc"
+    disk_device2: "/dev/sdc"
 
   tasks:
     - name: Tworzenie Physical Volume
