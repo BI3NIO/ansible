@@ -3,13 +3,14 @@
   hosts: agh
   become: yes
   vars:
-    disk_device: "/dev/sdb"
+    disk_device1: "/dev/sdb"
+    disk_device2: "dev/sdc"
 
   tasks:
     - name: Tworzenie Physical Volume
       lvg:
         vg: adg_vg
-        pvs: "{{ disk_device }}"
+        pvs: "{{ disk_device1 }}", "{{ disk_device2 }}
 
     - name: Tworzenie Logical Volume z RAID1
       lvol:
