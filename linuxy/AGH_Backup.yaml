@@ -1,6 +1,6 @@
 ---
-# --- PLAY 1: ROBIMY BACKUP NA SERWERZE AGH ---
-- name: Backup AdGuard Home z serwera produkcyjnego
+# --- ETAP 1: BACKUP Z SERWERA PRODUKCYJNEGO AGH ---
+- name: Kopia zapasowa AdGuard Home z serwera AGH
   hosts: agh
   become: yes
   gather_facts: yes
@@ -12,7 +12,7 @@
   tasks:
     - name: "Blok operacyjny - Backup"
       block:
-        - name: Pakuję dane AdGuarda (RAID1)
+        - name: Pakuję folder AdGuarda (RAID1)
           archive:
             path: "{{ agh_path }}"
             dest: "/tmp/agh_backup.tar.gz"
@@ -39,42 +39,52 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "🚨 **BŁĄD BACKUPU!** Serwer AGH nie mógł spakować danych."
+            content: "🚨 **BŁĄD BACKUPU!** Coś padło przy pakowaniu na serwerze AGH."
 
-# --- PLAY 2: WERYFIKACJA LOKALNIE NA SERWERZE ANSIBLE ---
-- name: Weryfikacja backupu na localhost
-  hosts: ansible
-  become: no
+# --- ETAP 2: ODTWORZENIE I URUCHOMIENIE NA SERWERZE ANSIBLE (localhost) ---
+- name: Weryfikacja backupu i uruchomienie testowe
+  hosts: localhost
+  connection: local
+  become: yes  # Uruchamiamy jako root na Ansible, żeby binarka mogła działać
 
   vars:
     backup_storage: "/tmp/backups_agh"
     test_restore_path: "/tmp/test_recovery_agh"
 
   tasks:
-    - name: "Blok operacyjny - Weryfikacja"
+    - name: "Blok operacyjny - Uruchomienie Testowe"
       block:
-        - name: Czyszczenie i tworzenie folderu testowego
+        - name: Przygotowuję czysty folder testowy
           file:
             path: "{{ test_restore_path }}"
             state: "{{ item }}"
           loop: [absent, directory]
 
-        - name: Rozpakowuję backup (Symulacja Recovery)
+        - name: Rozpakowuję backup na localhost
           unarchive:
             src: "{{ backup_storage }}/latest_backup.tar.gz"
             dest: "{{ test_restore_path }}"
             remote_src: yes
             extra_opts: ['--strip-components=1']
 
-        - name: Sprawdzam czy binarka AdGuarda istnieje
-          stat:
-            path: "{{ test_restore_path }}/AdGuardHome"
-          register: check_bin
+        - name: Zamykam stary proces testowy (jeśli działał)
+          shell: "pkill -f AdGuardHome || true"
 
-        - name: Fail jeśli backup jest do bani
-          fail:
-            msg: "Błąd weryfikacji danych!"
-          when: not check_bin.stat.exists
+        - name: Nadaję uprawnienia binarce
+          file:
+            path: "{{ test_restore_path }}/AdGuardHome"
+            mode: '0755'
+
+        - name: URUCHAMIAM ADGUARDA W TLE NA PORCIE 8888
+          shell: "nohup ./AdGuardHome -p 8888 > /dev/null 2>&1 &"
+          args:
+            chdir: "{{ test_restore_path }}"
+          async: 10
+          poll: 0
+
+        - name: Czekam chwilę na start serwera
+          pause:
+            seconds: 5
 
       rescue:
         - name: ALERT DISCORD - Błąd Weryfikacji
@@ -91,4 +101,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "🚨 **BŁĄD WERYFIKACJI!** Backup na localhost nie przeszedł testu."
+            content: "🚨 **BŁĄD WERYFIKACJI!** Nie udało się odpalić AdGuarda na serwerze Ansible."
