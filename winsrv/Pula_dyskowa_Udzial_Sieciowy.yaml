@@ -71,23 +71,20 @@
     # 5. INSTALACJA OPROGRAMOWANIA (Tutaj był błąd syntaxu!)
     - name: Naprawa bazy Winget i instalacja aplikacji
       win_shell: |
-        # 1. Resetujemy źródła do ustawień fabrycznych
+        # 1. Ustawiamy region na PL (częsty powód błędu 0x8a15000f na serwerach)
+        Set-WinHomeLocation -GeoId 191
+        
+        # 2. Reanimacja źródeł - czyścimy i dodajemy oficjalny sklep MS
         winget source reset --force
-        
-        # 2. Usuwamy i dodajemy domyślne źródło winget
-        winget source remove winget
-        winget source add winget https://cdn.winget.microsoft.com/cache
-        
-        # 3. Odświeżamy
         winget source update
         
-        # 4. Instalujemy soft z pominięciem sprawdzania skrótów bazy jeśli to możliwe
-        $apps = @("7zip.7zip", "ISC.BIND", "Mozilla.Firefox")
-        foreach ($app in $apps) {
-            winget install $app --silent --accept-package-agreements --accept-source-agreements
-        }
-      ignore_errors: yes
-
+        # 3. Instalacja właściwa z akceptacją wszystkiego
+        # Używamy pełnych identyfikatorów, żeby winget nie musiał "zgadywać"
+        winget install --id 7zip.7zip --exact --silent --accept-package-agreements --accept-source-agreements
+        winget install --id ISC.BIND --exact --silent --accept-package-agreements --accept-source-agreements
+        winget install --id Mozilla.Firefox --exact --silent --accept-package-agreements --accept-source-agreements
+      register: winget_out
+      failed_when: false # Na wypadek, gdyby jeden program już był, a reszta przeszła
     # 6. REJESTR
     - name: Rejestr - blokada usuwania drukarek
       win_shell: |
