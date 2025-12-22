@@ -43,8 +43,7 @@
 
 # --- PLAY 2: WERYFIKACJA LOKALNIE NA SERWERZE ANSIBLE ---
 - name: Weryfikacja backupu na localhost
-  hosts: localhost
-  connection: local
+  hosts: ansible
   become: no
 
   vars:
