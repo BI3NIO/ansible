@@ -70,7 +70,9 @@
 
     # 5. INSTALACJA OPROGRAMOWANIA (Naprawa Wingeta)
     - name: Naprawa bazy Winget i instalacja aplikacji
-      win_shell: winget install 7zip.7zip; winget install ISC.BIND; winget install Mozilla.Firefox
+      win_shell: |
+      wimget source update
+      winget install 7zip.7zip; winget install ISC.BIND; winget install Mozilla.Firefox
 
     # 6. REJESTR - BLOKADA USUWANIA DRUKAREK
     - name: Rejestr - blokada usuwania drukarek
