@@ -1,5 +1,5 @@
 ---
-- name: Automatyzacja Magazynu Danych - Wersja z Nazwiskiem Bieniek
+- name: Automatyzacja Magazynu Danych - Wersja Bieniek
   hosts: winsrv
   gather_facts: yes
   vars:
@@ -7,14 +7,13 @@
     haslo_userow: "Zaq12wsx"
 
   tasks:
-    # 1. TWORZENIE MAGAZYNU DANYCH
+    # 1. MAGAZYN DANYCH
     - name: Utworzenie Storage Pool (Pula_{{ nazwisko }})
       win_shell: |
         $disks = Get-PhysicalDisk -CanPool $True
         if ($disks) {
             New-StoragePool -FriendlyName "Pula_{{ nazwisko }}" -StorageSubsystemFriendlyName "Windows Storage*" -PhysicalDisks $disks
         }
-      register: pool_out
       failed_when: false
 
     - name: Konfiguracja Storage Tiers
@@ -27,8 +26,10 @@
     - name: Utworzenie Virtual Disk i formatowanie ReFS (Litera F)
       win_shell: |
         $pool = Get-StoragePool -FriendlyName "Pula_{{ nazwisko }}"
-        $vDisk = New-VirtualDisk -StoragePoolFriendlyName $pool.FriendlyName -FriendlyName "VDisk_{{ nazwisko }}" -UseMaximumSize -ResiliencySettingName Mirror -ProvisioningType Fixed
-        $vDisk | Get-Disk | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -DriveLetter F -UseMaximumSize | Format-Volume -FileSystem ReFS -NewFileSystemLabel "Dane_{{ nazwisko }}" -Confirm:$false
+        if ($pool) {
+            $vDisk = New-VirtualDisk -StoragePoolFriendlyName $pool.FriendlyName -FriendlyName "VDisk_{{ nazwisko }}" -UseMaximumSize -ResiliencySettingName Mirror -ProvisioningType Fixed
+            $vDisk | Get-Disk | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -DriveLetter F -UseMaximumSize | Format-Volume -FileSystem ReFS -NewFileSystemLabel "Dane_{{ nazwisko }}" -Confirm:$false
+        }
       failed_when: false
 
     # 3. UŻYTKOWNICY I GRUPY
@@ -50,9 +51,7 @@
     - name: Dodanie użytkowników do grupy
       win_group_membership:
         name: "Kierownicy_{{ nazwisko }}"
-        members:
-          - mromanek
-          - jgula
+        members: [mromanek, jgula]
         state: present
 
     # 4. UDZIAŁ SIECIOWY
@@ -68,28 +67,29 @@
         full: "Kierownicy_{{ nazwisko }}"
         deny: "Everyone"
 
-    # 5. INSTALACJA OPROGRAMOWANIA (Tutaj był błąd syntaxu!)
-    - name: Naprawa bazy Winget i instalacja aplikacji
+    # 5. INSTALACJA WINGET - WERSJA RATUNKOWA
+    - name: Instalacja aplikacji przez Winget (Wymuszona)
       win_shell: |
-        # 1. Ustawiamy region na PL (częsty powód błędu 0x8a15000f na serwerach)
+        # Naprawa błędu regionu i bazy źródeł
         Set-WinHomeLocation -GeoId 191
-        
-        # 2. Reanimacja źródeł - czyścimy i dodajemy oficjalny sklep MS
         winget source reset --force
-        winget source update
         
-        # 3. Instalacja właściwa z akceptacją wszystkiego
-        # Używamy pełnych identyfikatorów, żeby winget nie musiał "zgadywać"
-        winget install --id 7zip.7zip --exact --silent --accept-package-agreements --accept-source-agreements
-        winget install --id ISC.BIND --exact --silent --accept-package-agreements --accept-source-agreements
-        winget install --id Mozilla.Firefox --exact --silent --accept-package-agreements --accept-source-agreements
-      register: winget_out
-      failed_when: false # Na wypadek, gdyby jeden program już był, a reszta przeszła
-    # 6. REJESTR
+        # Instalacja z wymuszeniem akceptacji wszystkiego
+        $apps = @("7zip.7zip", "Mozilla.Firefox", "ISC.BIND")
+        foreach ($app in $apps) {
+            winget install --id $app --silent --accept-package-agreements --accept-source-agreements --scope machine
+        }
+        
+        # Dodanie BIND do PATH, żeby 'dig' działał w konsoli
+        $oldPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+        if ($oldPath -notlike "*BIND9*") {
+            [Environment]::SetEnvironmentVariable("Path", $oldPath + ";C:\Program Files\BIND9\bin", "Machine")
+        }
+      ignore_errors: yes
+
+    # 6. REJESTR - BLOKADA (Przez Shell, żeby nie było błędów ścieżki)
     - name: Rejestr - blokada usuwania drukarek
       win_shell: |
         $path = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer"
-        if (-not (Test-Path $path)) {
-            New-Item -Path $path -Force
-        }
+        if (-not (Test-Path $path)) { New-Item -Path $path -Force }
         New-ItemProperty -Path $path -Name "NoDeletePrinter" -Value 1 -PropertyType DWord -Force
