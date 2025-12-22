@@ -1,5 +1,6 @@
 ---
-- name: Backup AdGuard Home i weryfikacja (Wersja Północna)
+# --- PLAY 1: ROBIMY BACKUP NA SERWERZE AGH ---
+- name: Backup AdGuard Home z serwera produkcyjnego
   hosts: agh
   become: yes
   gather_facts: yes
@@ -7,10 +8,9 @@
   vars:
     backup_storage: "/tmp/backups_agh"
     agh_path: "/adguardhome"
-    test_restore_path: "/tmp/test_recovery_agh"
 
   tasks:
-    - name: "--- SEKCJA 1: BACKUP NA SERWERZE AGH ---"
+    - name: "Blok operacyjny - Backup"
       block:
         - name: Pakuję dane AdGuarda (RAID1)
           archive:
@@ -23,7 +23,7 @@
             src: "/tmp/agh_backup.tar.gz"
             dest: "{{ backup_storage }}/latest_backup.tar.gz"
             flat: yes
-
+      
       rescue:
         - name: ALERT DISCORD - Błąd Backup
           community.general.discord:
@@ -39,25 +39,26 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "🚨 **BŁĄD BACKUPU!** Coś padło na serwerze AGH."
+            content: "🚨 **BŁĄD BACKUPU!** Serwer AGH nie mógł spakować danych."
 
-    - name: "--- SEKCJA 2: WERYFIKACJA NA SERWERZE ANSIBLE ---"
+# --- PLAY 2: WERYFIKACJA LOKALNIE NA SERWERZE ANSIBLE ---
+- name: Weryfikacja backupu na localhost
+  hosts: localhost
+  connection: local
+  become: no
+
+  vars:
+    backup_storage: "/tmp/backups_agh"
+    test_restore_path: "/tmp/test_recovery_agh"
+
+  tasks:
+    - name: "Blok operacyjny - Weryfikacja"
       block:
-        - name: Tworzę folder na backup (lokalnie)
-          file:
-            path: "{{ backup_storage }}"
-            state: directory
-            mode: '0777'
-          delegate_to: localhost
-          become: no
-
-        - name: Czyścimy i tworzymy folder testowy (lokalnie)
+        - name: Czyszczenie i tworzenie folderu testowego
           file:
             path: "{{ test_restore_path }}"
             state: "{{ item }}"
           loop: [absent, directory]
-          delegate_to: localhost
-          become: no
 
         - name: Rozpakowuję backup (Symulacja Recovery)
           unarchive:
@@ -65,22 +66,16 @@
             dest: "{{ test_restore_path }}"
             remote_src: yes
             extra_opts: ['--strip-components=1']
-          delegate_to: localhost
-          become: no
 
-        - name: Sprawdzam czy binarka istnieje
+        - name: Sprawdzam czy binarka AdGuarda istnieje
           stat:
             path: "{{ test_restore_path }}/AdGuardHome"
           register: check_bin
-          delegate_to: localhost
-          become: no
 
         - name: Fail jeśli backup jest do bani
           fail:
-            msg: "Błąd weryfikacji!"
+            msg: "Błąd weryfikacji danych!"
           when: not check_bin.stat.exists
-          delegate_to: localhost
-          become: no
 
       rescue:
         - name: ALERT DISCORD - Błąd Weryfikacji
@@ -97,6 +92,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "🚨 **BŁĄD WERYFIKACJI!** Backup pobrany, ale test w /tmp nie przeszedł."
-          delegate_to: localhost
-          become: no
+            content: "🚨 **BŁĄD WERYFIKACJI!** Backup na localhost nie przeszedł testu."
