@@ -7,7 +7,6 @@
     haslo_userow: "Zaq12wsx"
 
   tasks:
-    # 1. STORAGE (Pula i dyski)
     - name: Utworzenie Storage Pool i Tiers
       win_shell: |
         $disks = Get-PhysicalDisk -CanPool $True
@@ -27,7 +26,6 @@
         }
       failed_when: false
 
-    # 2. UŻYTKOWNICY I GRUPY
     - name: Utworzenie użytkowników i grup
       block:
         - win_user:
@@ -46,7 +44,6 @@
             members: [mromanek, jgula]
             state: present
 
-    # 3. UDZIAŁY
     - name: Folder i Udostepnienie Projekty_{{ nazwisko }}
       win_file:
         path: 'F:\Projekty'
@@ -57,7 +54,6 @@
         full: "Kierownicy_{{ nazwisko }}"
         deny: "Everyone"
 
-    # 4. WINGET - INSTALACJA (Ta sekcja jest teraz "pancerna")
     - name: Winget - Odświeżenie źródeł
       win_shell: winget source update
       ignore_errors: yes
@@ -77,12 +73,6 @@
       win_shell: winget install --id ISC.Bind --exact --scope machine --silent --accept-package-agreements --accept-source-agreements
       ignore_errors: yes
 
-    - name: Dodanie BIND do PATH
-      win_path:
-        elements: 'C:\Program Files\BIND9\bin'
-        state: present
-
-    # 5. REJESTR - BLOKADA USUWANIA DRUKAREK (Wersja shellowa - bez bledow sciezki)
     - name: Rejestr - blokada usuwania drukarek
       win_shell: |
         $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer"
