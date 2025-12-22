@@ -65,7 +65,7 @@
       win_share:
         name: "Projekty_{{ nazwisko }}"
         path: 'F:\Projekty'
-        full: "Kierownicy_{{ nazwisko }}, BUILTIN\Administrators"
+        full: "Kierownicy_{{ nazwisko }}"
         deny: "Everyone"
 
     # 5. INSTALACJA OPROGRAMOWANIA (Naprawa Wingeta)
