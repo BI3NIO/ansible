@@ -1,6 +1,6 @@
 ---
 - name: Konfiguracja Puli Dyskowej i Udziału Sieciowego
-  hosts: windows
+  hosts: winsrv
   vars:
     nazwisko: "Bieniek" # <--- TUTAJ WPISZ SWOJE NAZWISKO
     haslo: "Zaq12wsx"
