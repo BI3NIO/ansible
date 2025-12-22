@@ -6,6 +6,10 @@
     backup_dest: "/backups/agh_bieniek"
 
   tasks:
+    - name: Pobieram datę bezpośrednio z systemu (obejście błędu)
+      command: date +%Y-%m-%d
+      register: system_date
+      delegate_to: localhost # Pobieramy datę z maszyny sterującej
     - name: "Główny blok operacji backupu"
       block:
         - name: Upewniam się, że folder na backup istnieje na maszynie Ansible
