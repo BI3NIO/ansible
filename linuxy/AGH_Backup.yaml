@@ -1,42 +1,31 @@
 ---
-- name: Backup AdGuard Home na serwer Ansible_Bieniek
+- name: Backup AdGuard Home i weryfikacja (Powiadomienia tylko przy błędach)
   hosts: agh
   become: yes
   gather_facts: yes
 
   vars:
-    backup_dest: "/backups/agh_bieniek"
+    backup_storage: "/backups/agh_bieniek"
+    agh_path: "/adguardhome"
+    test_restore_path: "/tmp/test_recovery_agh"
 
   tasks:
-    - name: "Blok operacyjny - Try"
+    - name: "SEKCJA 1: BACKUP (Z serwera AGH)"
       block:
-        - name: Tworzę folder na backupy lokalnie (bez szukania sudo)
-          file:
-            path: "{{ backup_dest }}"
-            state: directory
-            mode: '0755'
-          delegate_to: localhost
-          become: no  # <--- To rozwiązuje błąd "sudo: not found"
-
-        - name: Pakuję folder AdGuarda (RAID1) do archiwum
+        - name: Pakuję dane AdGuarda (RAID1)
           archive:
-            path: /adguardhome
-            dest: /tmp/agh_backup.tar.gz
+            path: "{{ agh_path }}"
+            dest: "/tmp/agh_backup.tar.gz"
             format: gz
 
-        - name: Przesyłam plik backupu na serwer Ansible_Bieniek
+        - name: Pobieram backup na serwer Ansible (Semaphore)
           fetch:
-            src: /tmp/agh_backup.tar.gz
-            dest: "{{ backup_dest }}/backup-{{ ansible_date_time.date }}.tar.gz"
+            src: "/tmp/agh_backup.tar.gz"
+            dest: "{{ backup_storage }}/latest_backup.tar.gz"
             flat: yes
 
-        - name: Usuwam plik tymczasowy z serwera AdGuard
-          file:
-            path: /tmp/agh_backup.tar.gz
-            state: absent
-
       rescue:
-        - name: Wysyłanie powiadomienia na Discord
+        - name: ALERT DISCORD - Błąd Backup
           community.general.discord:
             webhook_id: "1450900992336859249"
             webhook_token: !vault |
@@ -50,4 +39,53 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "❌ Błąd podczas backupu AdGuard Home na serwerze AGH_Bieniek!"
+            content: "🚨 **BŁĄD BACKUPU!** Nie udało się spakować lub pobrać danych z serwera AGH_Bieniek."
+
+    - name: "SEKCJA 2: WERYFIKACJA (Lokalnie na serwerze Ansible)"
+      delegate_to: localhost
+      become: no
+      block:
+        - name: Czyścimy stary folder testowy (jeśli istnieje)
+          file:
+            path: "{{ test_restore_path }}"
+            state: absent
+
+        - name: Tworzę folder testowy
+          file:
+            path: "{{ test_restore_path }}"
+            state: directory
+            mode: '0755'
+
+        - name: Rozpakowuję backup (Symulacja Recovery)
+          unarchive:
+            src: "{{ backup_storage }}/latest_backup.tar.gz"
+            dest: "{{ test_restore_path }}"
+            remote_src: yes
+            extra_opts: ['--strip-components=1']
+
+        - name: Sprawdzam czy plik binarny istnieje
+          stat:
+            path: "{{ test_restore_path }}/AdGuardHome"
+          register: check_bin
+
+        - name: Wymuś błąd jeśli pliku nie ma (Fail fast)
+          fail:
+            msg: "Błąd weryfikacji: Brak pliku AdGuardHome w archiwum!"
+          when: not check_bin.stat.exists
+
+      rescue:
+        - name: ALERT DISCORD - Błąd Weryfikacji
+          community.general.discord:
+            webhook_id: "1450900992336859249"
+            webhook_token: !vault |
+              $ANSIBLE_VAULT;1.1;AES256
+              37303932373334626461343363663132666666633464626634386438613066653963643364343535
+              3137616262333132366631653336616136663835326232300a663636323263616238316434623663
+              37373232396461643230366264323465326264636534383361393136393561613834323162343637
+              6436323463366338620a643631323964656635643166353535643830653866373037663465323964
+              65633865366334326136363932643966623233633366343930643339383136656332666463616432
+              30613830376133386563633438356531653339356566643333366233356530383935623465303539
+              37323133356365626338303062386436383130333837376130356661343762363733393365343838
+              36386532613435626466
+            username: Semaphore
+            content: "🚨 **BŁĄD WERYFIKACJI!** Backup pobrany, ale archiwum jest uszkodzone lub niekompletne."
