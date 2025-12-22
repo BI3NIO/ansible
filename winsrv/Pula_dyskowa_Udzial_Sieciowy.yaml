@@ -48,11 +48,11 @@
       win_file:
         path: 'F:\Projekty'
         state: directory
-      - win_share:
-        name: "Projekty_{{ nazwisko }}"
-        path: 'F:\Projekty'
-        full: "Kierownicy_{{ nazwisko }}"
-        deny: "Everyone"
+    - win_share:
+      name: "Projekty_{{ nazwisko }}"
+      path: 'F:\Projekty'
+      full: "Kierownicy_{{ nazwisko }}"
+      deny: "Everyone"
 
     
 
