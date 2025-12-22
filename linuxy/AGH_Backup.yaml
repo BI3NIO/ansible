@@ -1,42 +1,51 @@
+---
 - name: Backup AdGuard Home na serwer Ansible_Bieniek
   hosts: agh
   become: yes
   vars:
-    backup_dest: "/backups/agh_bieniek"  # Folder na serwerze Ansible
+    backup_dest: "/backups/agh_bieniek"
 
   tasks:
-    - name: Tworzenie backupu AdGuarda
-      archive:
-        path: /adguardhome
-        dest: /tmp/agh_backup.tar.gz
-        format: gz
-      register: archive_result
+    - name: "Główny blok operacji backupu"
+      block:
+        - name: Upewniam się, że folder na backup istnieje na maszynie Ansible
+          file:
+            path: "{{ backup_dest }}"
+            state: directory
+            mode: '0755'
+          delegate_to: localhost
+          become: no
 
-    - name: Tworzę archiwum z danymi AdGuarda (cały RAID1)
-      archive:
-        path: /adguardhome
-        dest: /tmp/agh_backup.tar.gz
-        format: gz
+        - name: Tworzę archiwum z danymi AdGuarda (cały RAID1)
+          archive:
+            path: /adguardhome
+            dest: /tmp/agh_backup.tar.gz
+            format: gz
 
-    - name: Przesyłam backup na serwer Ansible_Bieniek
-      fetch:
-        src: /tmp/agh_backup.tar.gz
-        dest: "{{ backup_dest }}/backup-{{ ansible_date_time.date }}.tar.gz"
-        flat: yes
-      register: transfer_result
+        - name: Przesyłam backup na serwer Ansible_Bieniek
+          fetch:
+            src: /tmp/agh_backup.tar.gz
+            dest: "{{ backup_dest }}/backup-{{ ansible_date_time.date }}.tar.gz"
+            flat: yes
 
-  # SEKCJA RATUNKOWA - Jeśli coś wyżej padnie, odpala się to:
-  rescue:
-    - name: Wysyłanie powiadomienia na Discord
-      community.general.discord:
-        webhook_id: 1450900992336859249
-        webhook_token: !vault |
-          $ANSIBLE_VAULT;1.1;AES256
-          37303932373334626461343363663132666666633464626634386438613066653963643364343535              3137616262333132366631653336616136663835326232300a663636323263616238316434623663
-          37373232396461643230366264323465326264636534383361393136393561613834323162343637
-          6436323463366338620a643631323964656635643166353535643830653866373037663465323964
-          65633865366334326136363932643966623233633366343930643339383136656332666463616432
-          30613830376133386563633438356531653339356566643333366233356530383935623465303539            37323133356365626338303062386436383130333837376130356661343762363733393365343838
-          36386532613435626466
-        username: Semaphore
-        content: "❌ Nie udało się zrobić kopii zapasowej AdGuarda Home"
+        - name: Sprzątanie pliku tymczasowego
+          file:
+            path: /tmp/agh_backup.tar.gz
+            state: absent
+
+      rescue:
+        - name: Wysyłanie powiadomienia na Discord
+          community.general.discord:
+            webhook_id: "1450900992336859249"
+            webhook_token: !vault |
+              $ANSIBLE_VAULT;1.1;AES256
+              37303932373334626461343363663132666666633464626634386438613066653963643364343535
+              3137616262333132366631653336616136663835326232300a663636323263616238316434623663
+              37373232396461643230366264323465326264636534383361393136393561613834323162343637
+              6436323463366338620a643631323964656635643166353535643830653866373037663465323964
+              65633865366334326136363932643966623233633366343930643339383136656332666463616432
+              30613830376133386563633438356531653339356566643333366233356530383935623465303539
+              37323133356365626338303062386436383130333837376130356661343762363733393365343838
+              36386532613435626466
+            username: Semaphore
+            content: "❌ Nie udało się zrobić kopii zapasowej AdGuarda Home na serwerze AGH_Bieniek"
