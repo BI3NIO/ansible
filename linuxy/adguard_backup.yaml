@@ -3,91 +3,73 @@
   hosts: agh
   become: yes
   vars:
+    # Źródło na serwerze AGH
     agh_dir: "/adguardhome"
-    tmp_archive: "/tmp/agh_backup.tar.gz"
-    remote_backup_dir: "/tmp/backups"
-    remote_backup_full_path: "/tmp/backups/agh_backup.tar.gz"
+    tmp_archive_on_agh: "/tmp/agh_backup.tar.gz"
+    
+    # Cel na serwerze Ansible (gdzie Semaphore go położy)
+    # UWAGA: Semaphore często ma problem z pisaniem w /tmp/backups, 
+    # więc użyjemy /tmp/ bezpośrednio, bo tam zawsze wolno pisać.
+    final_backup_path: "/tmp/agh_final_backup.tar.gz"
+    
+    # Gdzie testujemy
     test_restore_dir: "/tmp/agh_test_instance"
     backup_dest_host: "ansible"
 
   tasks:
-    # --- KROK 0: NAPRAWA FOLDERÓW NA SERWERZE ANSIBLE ---
-    - name: Reset folderu backupow na serwerze Ansible
-      delegate_to: "{{ backup_dest_host }}"
-      become: yes
-      file:
-        path: "{{ remote_backup_dir }}"
-        state: "{{ item }}"
-      with_items:
-        - absent
-        - directory
-
-    # --- KROK 1: BACKUP NA AGH ---
+    # --- ETAP 1: BACKUP NA SERWERZE AGH ---
     - name: Sekcja Backup
       block:
-        - name: Pakowanie plikow AdGuard Home
+        - name: Pakowanie plików AdGuard Home
           archive:
             path: "{{ agh_dir }}"
-            dest: "{{ tmp_archive }}"
+            dest: "{{ tmp_archive_on_agh }}"
             format: gz
 
-        - name: Wysylka backupu
+        - name: Wysylka backupu bezpośrednio do /tmp
           fetch:
-            src: "{{ tmp_archive }}"
-            dest: "{{ remote_backup_full_path }}"
-            flat: yes
+            src: "{{ tmp_archive_on_agh }}"
+            dest: "{{ final_backup_path }}"
+            flat: yes # To MUSI być yes, żeby nie było podfolderów
 
-        - name: Sprzątanie na AGH
+        - name: Czyszczenie tymczasowego pliku na AGH
           file:
-            path: "{{ tmp_archive }}"
+            path: "{{ tmp_archive_on_agh }}"
             state: absent
       rescue:
-        - name: Powiadomienie o bledzie backupu
+        - name: Powiadomienie o błędzie pakowania
           debug:
-            msg: "BLAD: Nie udalo sie spakowac AdGuarda!"
+            msg: "BŁĄD: Backup na AGH nie wyszedł."
 
-    # --- KROK 2: WERYFIKACJA NA ANSIBLE ---
-    - name: Sekcja Weryfikacja Live
+    # --- ETAP 2: WERYFIKACJA NA SERWERZE ANSIBLE ---
+    - name: Sekcja Weryfikacja
       delegate_to: "{{ backup_dest_host }}"
       become: yes
       block:
-        - name: Szukanie pliku
-          find:
-            paths: "{{ remote_backup_dir }}"
-            patterns: "agh_backup.tar.gz"
-            recurse: yes
-            file_type: file
-          register: found_backups
-
-        - name: Sprawdzenie czy plik istnieje
-          fail:
-            msg: "Nadal nie widze pliku w {{ remote_backup_dir }}!"
-          when: found_backups.matched == 0
-
         - name: Przygotowanie folderu testu
           file:
             path: "{{ test_restore_dir }}"
             state: directory
-            mode: '0755'
+            mode: '0777'
 
-        - name: Rozpakowanie backupu
+        - name: Rozpakowanie backupu z konkretnej ścieżki
           unarchive:
-            src: "{{ found_backups.files[0].path }}"
+            src: "{{ final_backup_path }}"
             dest: "{{ test_restore_dir }}"
-            remote_src: yes
+            remote_src: yes # Bo plik już tam jest na dysku
 
-        - name: Uruchomienie testowe w tle
+        - name: Uruchomienie testowe AdGuarda
           shell: |
             pkill -f "AdGuardHome" || true
             nohup {{ test_restore_dir }}/adguardhome/AdGuardHome -w {{ test_restore_dir }}/adguardhome > /tmp/agh_test_log.txt 2>&1 &
           async: 15
           poll: 0
 
-        - name: Czekamy na port 3000
+        - name: Czekamy aż port 3000 ożyje
           pause:
             seconds: 10
 
-        - name: TEST PANELU WWW
+        - name: TEST PANELU WWW (kod 200)
           uri:
             url: "http://127.0.0.1:3000"
             status_code: 200
@@ -95,9 +77,9 @@
 
         - name: Sukces
           debug:
-            msg: "WYGRANA! Plik znaleziony i przetestowany."
+            msg: "WYGRANA! System odtworzony z pliku {{ final_backup_path }}"
 
       rescue:
-        - name: Powiadomienie o trupie
+        - name: Powiadomienie o błędzie weryfikacji
           debug:
-            msg: "ALARM! Weryfikacja nie przeszla!"
+            msg: "ALARM! Odtwarzanie nie zadziałało. Sprawdź czy plik istnieje komendą: ls -l {{ final_backup_path }}"
