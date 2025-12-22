@@ -7,7 +7,7 @@
     haslo_userow: "Zaq12wsx"
 
   tasks:
-    - name: Utworzenie Storage Pool i Tiers
+    - name: Utworzenie Puli Magazynowej i Tieringu
       win_shell: |
         $disks = Get-PhysicalDisk -CanPool $True
         if ($disks) {
@@ -17,7 +17,7 @@
         New-StorageTier -StoragePoolFriendlyName "Pula_{{ nazwisko }}" -FriendlyName "CapacityTier" -MediaType HDD -ErrorAction SilentlyContinue
       failed_when: false
 
-    - name: Utworzenie Virtual Disk i ReFS (Litera F)
+    - name: Utworzenie Virtual Disk i ReFS
       win_shell: |
         $pool = Get-StoragePool -FriendlyName "Pula_{{ nazwisko }}"
         if ($pool -and -not (Get-DriveLetter -DriveLetter F)) {
@@ -44,7 +44,7 @@
             members: [mromanek, jgula]
             state: present
 
-    - name: Folder i Udostepnienie Projekty_{{ nazwisko }}
+    - name: Folder i Udostepnienie Projekty_Bieniek
       win_file:
         path: 'F:\Projekty'
         state: directory
