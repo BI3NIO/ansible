@@ -58,29 +58,29 @@
         deny: "Everyone"
 
     # 4. WINGET - INSTALACJA (Ta sekcja jest teraz "pancerna")
-    - name: Instalacja aplikacji przez Winget
-      win_shell: |
-        # 1. Fix dla regionu
-        Set-WinHomeLocation -GeoId 191
-        winget source update
-        
-        # 2. Instalacja 7zip (Skoro recznie dziala, to tu tez musi)
-        winget install --id 7zip.7zip --exact --scope machine --silent --accept-package-agreements --accept-source-agreements
-        
-        # 3. Instalacja Firefox
-        winget install --id Mozilla.Firefox --exact --scope machine --silent --accept-package-agreements --accept-source-agreements
-        
-        # 4. Instalacja BIND i naprawa PATH dla 'dig'
-        winget install --id ISC.BIND --exact --scope machine --silent --accept-package-agreements --accept-source-agreements
-        
-        $bindPath = "C:\Program Files\BIND9\bin"
-        if (Test-Path $bindPath) {
-            $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-            if ($currentPath -notlike "*BIND9*") {
-                [Environment]::SetEnvironmentVariable("Path", $currentPath + ";$bindPath", "Machine")
-            }
-        }
+    - name: Winget - Odświeżenie źródeł
+      win_shell: winget source update
       ignore_errors: yes
+
+    - name: Winget - Instalacja 7zip
+      win_shell: winget install --id 7zip.7zip --exact --scope machine --silent --accept-package-agreements --accept-source-agreements
+      register: install_7zip
+      until: install_7zip is succeeded
+      retries: 2
+      delay: 10
+
+    - name: Winget - Instalacja Firefox
+      win_shell: winget install --id Mozilla.Firefox --exact --scope machine --silent --accept-package-agreements --accept-source-agreements
+      ignore_errors: yes
+
+    - name: Winget - Instalacja BIND
+      win_shell: winget install --id ISC.BIND --exact --scope machine --silent --accept-package-agreements --accept-source-agreements
+      ignore_errors: yes
+
+    - name: Dodanie BIND do PATH
+      win_path:
+        elements: 'C:\Program Files\BIND9\bin'
+        state: present
 
     # 5. REJESTR - BLOKADA USUWANIA DRUKAREK (Wersja shellowa - bez bledow sciezki)
     - name: Rejestr - blokada usuwania drukarek
