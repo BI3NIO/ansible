@@ -74,7 +74,7 @@
       ignore_errors: yes
 
     - name: Winget - Instalacja BIND
-      win_shell: winget install --id ISC.BIND --exact --scope machine --silent --accept-package-agreements --accept-source-agreements
+      win_shell: winget install --id ISC.Bind --exact --scope machine --silent --accept-package-agreements --accept-source-agreements
       ignore_errors: yes
 
     - name: Dodanie BIND do PATH
