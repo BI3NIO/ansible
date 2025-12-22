@@ -9,20 +9,20 @@
     backup_dest_host: "ansible"
 
   tasks:
-    # --- CZĘŚĆ 1: BACKUP NA AGH ---
+    # --- CZĘŚĆ 1: BACKUP NA SERWERZE AGH ---
     - name: Pakowanie plikow AdGuard
       archive:
         path: "{{ agh_dir }}"
         dest: "{{ tmp_archive }}"
         format: gz
 
-    - name: Sciaganie backupu do folderu playbooka
+    - name: Sciaganie backupu do kontrolera Semaphore
       fetch:
         src: "{{ tmp_archive }}"
         dest: "./agh_final_backup.tar.gz"
         flat: yes
 
-    # --- CZĘŚĆ 2: WERYFIKACJA NA ANSIBLE ---
+    # --- CZĘŚĆ 2: WERYFIKACJA NA SERWERZE ANSIBLE ---
     - name: Sekcja Weryfikacja
       delegate_to: "{{ backup_dest_host }}"
       become: yes
@@ -33,7 +33,7 @@
             state: directory
             mode: '0777'
 
-        - name: Kopiowanie pliku na maszyne docelowa
+        - name: Wyslanie pliku na maszyne docelowa
           copy:
             src: "./agh_final_backup.tar.gz"
             dest: "/tmp/agh_final_backup.tar.gz"
@@ -44,7 +44,7 @@
             dest: "{{ test_restore_dir }}"
             remote_src: yes
 
-        - name: Znajdz gdzie dokladnie rozpakowal sie AdGuardHome
+        - name: Znajdz binarke AdGuardHome
           find:
             paths: "{{ test_restore_dir }}"
             patterns: "AdGuardHome"
@@ -52,17 +52,17 @@
             file_type: file
           register: agh_found
 
-        - name: Uruchomienie AdGuarda (Wymuszenie startu z wlasciwego folderu)
+        - name: Uruchomienie testowe (Wymuszenie portu 3000)
           shell: |
             pkill -f "AdGuardHome" || true
             sleep 2
-            # Wchodzimy do folderu gdzie jest binarka i odpalamy
-            cd {{ agh_found.files[0].path | dirname }} && nohup ./AdGuardHome -s run -w . -p 3000 > /tmp/agh_test_log.txt 2>&1 &
+            # Wchodzimy do folderu i odpalamy z wymuszeniem konfiguracji
+            cd {{ agh_found.files[0].path | dirname }} && nohup ./AdGuardHome -p 3000 -w . -s run > /tmp/agh_test_log.txt 2>&1 &
           async: 30
           poll: 0
           when: agh_found.matched > 0
 
-        - name: Czekamy dlużej (AdGuard potrzebuje chwili na baze danych)
+        - name: Czekamy na port 3000
           pause:
             seconds: 15
 
@@ -75,15 +75,16 @@
 
         - name: Sukces
           debug:
-            msg: "WYGRANA! System wstal z backupu na serwerze Ansible."
+            msg: "WYGRANA! System wstal z backupu na porcie 3000."
 
       rescue:
-        - name: Pokaz co jest w folderze testowym (Debug struktury)
-          command: "ls -R {{ test_restore_dir }}"
-          register: dir_structure
+        - name: Ostatnia szansa - pokaz logi startu
+          command: "cat /tmp/agh_test_log.txt"
+          register: startup_logs
+          ignore_errors: yes
 
-        - name: Ostateczny raport bledu
+        - name: Raport bledu
           debug:
             msg: 
               - "Padlo na ostatniej prostej."
-              - "Struktura plikow: {{ dir_structure.stdout_lines }}"
+              - "Logi binarne: {{ startup_logs.stdout_lines | default('Brak logów') }}"
