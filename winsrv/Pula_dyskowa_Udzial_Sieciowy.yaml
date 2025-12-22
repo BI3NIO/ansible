@@ -49,12 +49,18 @@
         path: 'F:\Projekty'
         state: directory
     - win_share:
-      name: "Projekty_{{ nazwisko }}"
-      path: 'F:\Projekty'
-      full: "Kierownicy_{{ nazwisko }}"
-      deny: "Everyone"
+        name: "Projekty_{{ nazwisko }}"
+        path: 'F:\Projekty'
+        full: "Kierownicy_{{ nazwisko }}"
+        deny: "Everyone"
 
-    
+    - name: Nadanie uprawnien NTFS dla grupy Kierownicy
+      win_acl:
+        path: 'F:\Projekty'
+        user: "Kierownicy_{{ nazwisko }}"
+        rights: FullControl
+        type: allow
+        state: present
 
     - name: Winget - Odświeżenie źródeł
       win_shell: winget source update
