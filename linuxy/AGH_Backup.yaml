@@ -2,43 +2,41 @@
 - name: Backup AdGuard Home na serwer Ansible_Bieniek
   hosts: agh
   become: yes
+  gather_facts: yes  # To musi być na yes, żeby mieć datę!
+
   vars:
     backup_dest: "/backups/agh_bieniek"
 
   tasks:
-    - name: Pobieram datę bezpośrednio z systemu (obejście błędu)
-      command: date +%Y-%m-%d
-      register: system_date
-      delegate_to: localhost # Pobieramy datę z maszyny sterującej
-    - name: "Główny blok operacji backupu"
+    - name: "Blok operacyjny - Try"
       block:
-        - name: Upewniam się, że folder na backup istnieje na maszynie Ansible
+        - name: Tworzę folder na backupy na serwerze Ansible (lokalnie)
           file:
             path: "{{ backup_dest }}"
             state: directory
             mode: '0755'
           delegate_to: localhost
-          become: no
+          # Skoro użyszkodnik to root, to bez problemu stworzy /backups
 
-        - name: Tworzę archiwum z danymi AdGuarda (cały RAID1)
+        - name: Pakuję folder AdGuarda (RAID1) do archiwum
           archive:
             path: /adguardhome
             dest: /tmp/agh_backup.tar.gz
             format: gz
 
-        - name: Przesyłam backup na serwer Ansible_Bieniek
+        - name: Przesyłam plik backupu na serwer Ansible_Bieniek
           fetch:
             src: /tmp/agh_backup.tar.gz
             dest: "{{ backup_dest }}/backup-{{ ansible_date_time.date }}.tar.gz"
             flat: yes
 
-        - name: Sprzątanie pliku tymczasowego
+        - name: Usuwam plik tymczasowy z serwera AdGuard
           file:
             path: /tmp/agh_backup.tar.gz
             state: absent
 
       rescue:
-        - name: Wysyłanie powiadomienia na Discord
+        - name: Wysyłanie powiadomienia na Discord (Alarm!)
           community.general.discord:
             webhook_id: "1450900992336859249"
             webhook_token: !vault |
@@ -52,4 +50,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "❌ Nie udało się zrobić kopii zapasowej AdGuarda Home na serwerze AGH_Bieniek"
+            content: "❌ **BŁĄD BACKUPU!** Serwer AGH_Bieniek nie wysłał dzisiejszej kopii zapasowej. Sprawdź logi w Semaphore!"
