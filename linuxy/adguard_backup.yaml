@@ -12,7 +12,7 @@
 
   tasks:
     # --- KROK 0: NAPRAWA FOLDERÓW NA SERWERZE ANSIBLE ---
-    - name: Reset folderu backupów na serwerze Ansible
+    - name: Reset folderu backupow na serwerze Ansible
       delegate_to: "{{ backup_dest_host }}"
       become: yes
       file:
@@ -25,32 +25,33 @@
     # --- KROK 1: BACKUP NA AGH ---
     - name: Sekcja Backup
       block:
-        - name: Pakowanie plików AdGuard Home
+        - name: Pakowanie plikow AdGuard Home
           archive:
             path: "{{ agh_dir }}"
             dest: "{{ tmp_archive }}"
             format: gz
 
-        - name: Wysyłka backupu (Wymuszenie płaskiej struktury)
+        - name: Wysylka backupu
           fetch:
             src: "{{ tmp_archive }}"
             dest: "{{ remote_backup_full_path }}"
-            flat: yes # TO JEST KLUCZ - plik wyląduje dokładnie tam, gdzie chcemy
+            flat: yes
 
         - name: Sprzątanie na AGH
           file:
             path: "{{ tmp_archive }}"
             state: absent
       rescue:
-        - name: Powiadomienie o błędzie backupu
-          debug: msg="BŁĄD: Nie udało się spakować AdGuarda!"
+        - name: Powiadomienie o bledzie backupu
+          debug:
+            msg: "BLAD: Nie udalo sie spakowac AdGuarda!"
 
     # --- KROK 2: WERYFIKACJA NA ANSIBLE ---
     - name: Sekcja Weryfikacja Live
       delegate_to: "{{ backup_dest_host }}"
       become: yes
       block:
-        - name: Szukanie pliku (Pies gończy v3.0)
+        - name: Szukanie pliku
           find:
             paths: "{{ remote_backup_dir }}"
             patterns: "agh_backup.tar.gz"
@@ -60,7 +61,7 @@
 
         - name: Sprawdzenie czy plik istnieje
           fail:
-            msg: "Nadal nie widzę pliku w {{ remote_backup_dir }}! Sprawdź uprawnienia."
+            msg: "Nadal nie widze pliku w {{ remote_backup_dir }}!"
           when: found_backups.matched == 0
 
         - name: Przygotowanie folderu testu
@@ -94,8 +95,9 @@
 
         - name: Sukces
           debug:
-            msg: "WYGRANA! Plik znaleziony i przetestowany: {{ found_backups.files[0].path }}"
+            msg: "WYGRANA! Plik znaleziony i przetestowany."
 
       rescue:
         - name: Powiadomienie o trupie
-          debug: msg="ALARM! Weryfikacja nie przeszła!"
+          debug:
+            msg: "ALARM! Weryfikacja nie przeszla!"
