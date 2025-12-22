@@ -45,8 +45,8 @@
 - name: Weryfikacja backupu i uruchomienie testowe
   hosts: localhost
   connection: local
-  gather_facts: no  # <--- WYŁĄCZONE, żeby nie szukało sudo
-  become: no        # <--- WYŁĄCZONE, działamy jako zwykły użytkownik Semaphore
+  gather_facts: no
+  become: no        # Działamy bez sudo na localhost
 
   vars:
     backup_storage: "/tmp/backups_agh"
@@ -55,6 +55,10 @@
   tasks:
     - name: "Blok operacyjny - Uruchomienie Testowe"
       block:
+        - name: Zamykam stary proces testowy (ignorując błędy)
+          shell: "pkill -f AdGuardHome"
+          ignore_errors: yes
+
         - name: Przygotowuję czysty folder testowy
           file:
             path: "{{ test_restore_path }}"
@@ -67,9 +71,6 @@
             dest: "{{ test_restore_path }}"
             remote_src: yes
             extra_opts: ['--strip-components=1']
-
-        - name: Zamykam stary proces testowy (jeśli działał)
-          shell: "pkill -f AdGuardHome || true"
 
         - name: Nadaję uprawnienia binarce
           file:
