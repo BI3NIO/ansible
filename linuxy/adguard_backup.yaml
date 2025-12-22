@@ -57,7 +57,7 @@
             pkill -f "AdGuardHome" || true
             sleep 2
             # Wchodzimy do folderu gdzie jest binarka i odpalamy
-            cd {{ agh_found.files[0].path | dirname }} && nohup ./AdGuardHome -w . -p 3000 > /tmp/agh_test_log.txt 2>&1 &
+            cd {{ agh_found.files[0].path | dirname }} && nohup ./AdGuardHome -s run -w . -p 3000 > /tmp/agh_test_log.txt 2>&1 &
           async: 30
           poll: 0
           when: agh_found.matched > 0
