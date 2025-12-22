@@ -71,10 +71,21 @@
     # 5. INSTALACJA OPROGRAMOWANIA (Tutaj był błąd syntaxu!)
     - name: Naprawa bazy Winget i instalacja aplikacji
       win_shell: |
+        # 1. Resetujemy źródła do ustawień fabrycznych
+        winget source reset --force
+        
+        # 2. Usuwamy i dodajemy domyślne źródło winget
+        winget source remove winget
+        winget source add winget https://cdn.winget.microsoft.com/cache
+        
+        # 3. Odświeżamy
         winget source update
-        winget install 7zip.7zip --silent --accept-package-agreements --accept-source-agreements
-        winget install ISC.BIND --silent --accept-package-agreements --accept-source-agreements
-        winget install Mozilla.Firefox --silent --accept-package-agreements --accept-source-agreements
+        
+        # 4. Instalujemy soft z pominięciem sprawdzania skrótów bazy jeśli to możliwe
+        $apps = @("7zip.7zip", "ISC.BIND", "Mozilla.Firefox")
+        foreach ($app in $apps) {
+            winget install $app --silent --accept-package-agreements --accept-source-agreements
+        }
       ignore_errors: yes
 
     # 6. REJESTR
