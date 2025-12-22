@@ -44,38 +44,46 @@
             dest: "{{ test_restore_dir }}"
             remote_src: yes
 
-        - name: Uruchomienie testowe AdGuarda (Wymuszenie portu 3000)
+        - name: Znajdz gdzie dokladnie rozpakowal sie AdGuardHome
+          find:
+            paths: "{{ test_restore_dir }}"
+            patterns: "AdGuardHome"
+            recurse: yes
+            file_type: file
+          register: agh_found
+
+        - name: Uruchomienie AdGuarda (Wymuszenie startu z wlasciwego folderu)
           shell: |
             pkill -f "AdGuardHome" || true
             sleep 2
-            cd {{ test_restore_dir }}/adguardhome && nohup ./AdGuardHome -w . -c AdGuardHome.yaml -p 3000 > /tmp/agh_test_log.txt 2>&1 &
+            # Wchodzimy do folderu gdzie jest binarka i odpalamy
+            cd {{ agh_found.files[0].path | dirname }} && nohup ./AdGuardHome -w . -p 3000 > /tmp/agh_test_log.txt 2>&1 &
           async: 30
           poll: 0
+          when: agh_found.matched > 0
 
-        - name: Czekamy dlużej aż port 3000 ożyje
+        - name: Czekamy dlużej (AdGuard potrzebuje chwili na baze danych)
           pause:
-            seconds: 20
+            seconds: 15
 
-        - name: TEST WWW (Próba połaczenia)
+        - name: TEST PORTU 3000
           wait_for:
             host: 127.0.0.1
             port: 3000
             state: started
-            timeout: 15
-          register: port_check
+            timeout: 20
 
         - name: Sukces
           debug:
-            msg: "GRATULACJE! Backup zweryfikowany. AdGuard Home dziaia na porcie 3000."
+            msg: "WYGRANA! System wstal z backupu na serwerze Ansible."
 
       rescue:
-        - name: Wyswietl logi AdGuarda w razie bledu
-          command: "tail -n 20 /tmp/agh_test_log.txt"
-          register: agh_logs
-          ignore_errors: yes
+        - name: Pokaz co jest w folderze testowym (Debug struktury)
+          command: "ls -R {{ test_restore_dir }}"
+          register: dir_structure
 
-        - name: Powiadomienie o bledzie z logami
+        - name: Ostateczny raport bledu
           debug:
             msg: 
-              - "ALARM! Test WWW padl."
-              - "Ostatnie logi AdGuarda: {{ agh_logs.stdout_lines | default('Brak logów') }}"
+              - "Padlo na ostatniej prostej."
+              - "Struktura plikow: {{ dir_structure.stdout_lines }}"
