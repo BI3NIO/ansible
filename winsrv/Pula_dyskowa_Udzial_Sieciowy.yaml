@@ -1,6 +1,6 @@
 ---
 - name: Automatyzacja Magazynu Danych - Wersja z Nazwiskiem
-  hosts: windows
+  hosts: winsrv
   gather_facts: yes
   vars:
     nazwisko: "Bieniek" # <--- Tutaj wpisałem Twoje nazwisko
