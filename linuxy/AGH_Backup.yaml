@@ -13,6 +13,12 @@
         format: gz
       register: archive_result
 
+    - name: Tworzę archiwum z danymi AdGuarda (cały RAID1)
+      archive:
+        path: /adguardhome
+        dest: /tmp/agh_backup.tar.gz
+        format: gz
+
     - name: Przesyłam backup na serwer Ansible_Bieniek
       fetch:
         src: /tmp/agh_backup.tar.gz
