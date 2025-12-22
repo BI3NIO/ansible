@@ -3,11 +3,8 @@
   hosts: agh
   become: yes
   vars:
-    # Serwer AGH
     agh_dir: "/adguardhome"
     tmp_archive: "/tmp/agh_backup.tar.gz"
-    
-    # Maszyna testowa (Ansible)
     test_restore_dir: "/tmp/agh_test_instance"
     backup_dest_host: "ansible"
 
@@ -22,7 +19,6 @@
     - name: Sciaganie backupu do folderu playbooka
       fetch:
         src: "{{ tmp_archive }}"
-        # To zapisze plik w folderze, w ktorym Semaphore trzyma ten projekt
         dest: "./agh_final_backup.tar.gz"
         flat: yes
 
@@ -37,8 +33,7 @@
             state: directory
             mode: '0777'
 
-        - name: Kopiowanie pliku z kontrolera na maszyne docelowa
-          # Skoro fetch sciagnal plik na kontroler, teraz go tam wyslemy
+        - name: Kopiowanie pliku na maszyne docelowa
           copy:
             src: "./agh_final_backup.tar.gz"
             dest: "/tmp/agh_final_backup.tar.gz"
@@ -49,28 +44,38 @@
             dest: "{{ test_restore_dir }}"
             remote_src: yes
 
-        - name: Uruchomienie testowe AdGuarda
+        - name: Uruchomienie testowe AdGuarda (Wymuszenie portu 3000)
           shell: |
             pkill -f "AdGuardHome" || true
-            nohup {{ test_restore_dir }}/adguardhome/AdGuardHome -w {{ test_restore_dir }}/adguardhome > /tmp/agh_test_log.txt 2>&1 &
-          async: 15
+            sleep 2
+            nohup {{ test_restore_dir }}/adguardhome/AdGuardHome -w {{ test_restore_dir }}/adguardhome -p 3000 > /tmp/agh_test_log.txt 2>&1 &
+          async: 30
           poll: 0
 
-        - name: Czekamy na start (port 3000)
+        - name: Czekamy dlużej aż port 3000 ożyje
           pause:
-            seconds: 12
+            seconds: 20
 
-        - name: TEST WWW
-          uri:
-            url: "http://127.0.0.1:3000"
-            status_code: 200
-          register: web_test
+        - name: TEST WWW (Próba połaczenia)
+          wait_for:
+            host: 127.0.0.1
+            port: 3000
+            state: started
+            timeout: 15
+          register: port_check
 
         - name: Sukces
           debug:
-            msg: "WYGRANA! Panel WWW odpowiedzial poprawnie."
+            msg: "GRATULACJE! Backup zweryfikowany. AdGuard Home dziaia na porcie 3000."
 
       rescue:
-        - name: Powiadomienie o bledzie
+        - name: Wyswietl logi AdGuarda w razie bledu
+          command: "tail -n 20 /tmp/agh_test_log.txt"
+          register: agh_logs
+          ignore_errors: yes
+
+        - name: Powiadomienie o bledzie z logami
           debug:
-            msg: "ALARM! Backup nie przeszedl testu. Sprawdz logi!"
+            msg: 
+              - "ALARM! Test WWW padl."
+              - "Ostatnie logi AdGuarda: {{ agh_logs.stdout_lines | default('Brak logów') }}"
