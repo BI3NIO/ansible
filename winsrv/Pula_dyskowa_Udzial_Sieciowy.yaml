@@ -79,9 +79,9 @@
 
     # 6. REJESTR
     - name: Rejestr - blokada usuwania drukarek
-      win_regedit:
-        path: HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer
-        name: NoDeletePrinter
-        data: 1
-        type: dword
-        state: present
+      win_shell: |
+        $path = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+        if (-not (Test-Path $path)) {
+            New-Item -Path $path -Force
+        }
+        New-ItemProperty -Path $path -Name "NoDeletePrinter" -Value 1 -PropertyType DWord -Force
