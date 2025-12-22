@@ -1,55 +1,53 @@
 ---
-- name: Konfiguracja Puli Dyskowej i Udziału Sieciowego
-  hosts: winsrv
+- name: Automatyzacja Magazynu Danych - Wersja z Nazwiskiem
+  hosts: windows
+  gather_facts: yes
   vars:
-    nazwisko: "Bieniek" # <--- TUTAJ WPISZ SWOJE NAZWISKO
-    haslo: "Zaq12wsx"
+    nazwisko: "Bieniek" # <--- Tutaj wpisałem Twoje nazwisko
+    haslo_userow: "Zaq12wsx"
 
   tasks:
-    # 1. TWORZENIE PULI DYSKOWEJ I TIERINGU
-    # Bierzemy wszystkie surowe dyski i robimy z nich jedną wielką przestrzeń
-    - name: Utworzenie Storage Pool ze wszystkich wolnych dysków
+    # 1. TWORZENIE MAGAZYNU DANYCH (STORAGE POOL)
+    - name: Utworzenie Storage Pool (Pula_{{ nazwisko }})
       win_shell: |
         $disks = Get-PhysicalDisk -CanPool $True
-        New-StoragePool -FriendlyName "Pula_{{ nazwisko }}" -StorageSubsystemFriendlyName "Windows Storage*" -PhysicalDisks $disks
-      register: pool_creation
-      ignore_errors: yes
+        if ($disks) {
+            New-StoragePool -FriendlyName "Pula_{{ nazwisko }}" -StorageSubsystemFriendlyName "Windows Storage*" -PhysicalDisks $disks
+        }
+      register: pool_out
+      failed_when: false
 
-    # Ustawiamy SSD jako "turbo-napęd"
-    - name: Konfiguracja Storage Tiers (SSD jako szybka warstwa)
+    - name: Konfiguracja Storage Tiers
       win_shell: |
-        $pool = Get-StoragePool -FriendlyName "Pula_{{ nazwisko }}"
-        New-StorageTier -StoragePoolFriendlyName $pool.FriendlyName -FriendlyName "Szybki_SSD" -MediaType SSD
-        New-StorageTier -StoragePoolFriendlyName $pool.FriendlyName -FriendlyName "Wolny_HDD" -MediaType HDD
-      ignore_errors: yes
+        New-StorageTier -StoragePoolFriendlyName "Pula_{{ nazwisko }}" -FriendlyName "FastTier" -MediaType SSD
+        New-StorageTier -StoragePoolFriendlyName "Pula_{{ nazwisko }}" -FriendlyName "CapacityTier" -MediaType HDD
+      failed_when: false
 
-    # 2. WIRTUALNY DYSK I REFS
-    # Tworzymy dysk z "lustrem" (Mirror), żeby dane nie zginęły jak jeden padnie
-    - name: Utworzenie wirtualnego dysku (Mirroring) i formatowanie ReFS
+    # 2. WIRTUALNY DYSK I REFS (LUSTRO)
+    - name: Utworzenie Virtual Disk i formatowanie ReFS (Litera F)
       win_shell: |
         $pool = Get-StoragePool -FriendlyName "Pula_{{ nazwisko }}"
         $vDisk = New-VirtualDisk -StoragePoolFriendlyName $pool.FriendlyName -FriendlyName "VDisk_{{ nazwisko }}" -UseMaximumSize -ResiliencySettingName Mirror -ProvisioningType Fixed
-        $vDisk | Get-Disk | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -DriveLetter F -UseMaximumSize | Format-Volume -FileSystem ReFS -NewFileSystemLabel "Dane_Firmowe"
-      ignore_errors: yes
+        $vDisk | Get-Disk | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -DriveLetter F -UseMaximumSize | Format-Volume -FileSystem ReFS -NewFileSystemLabel "Dane_{{ nazwisko }}" -Confirm:$false
+      failed_when: false
 
     # 3. UŻYTKOWNICY I GRUPY
-    - name: Utworzenie użytkowników Marka i Jacka
+    - name: Utworzenie użytkowników Marek i Jacek
       win_user:
-        name: "{{ item.name }}"
+        name: "{{ item.login }}"
         fullname: "{{ item.full }}"
-        password: "{{ haslo }}"
+        password: "{{ haslo_userow }}"
         state: present
       loop:
-        - { name: 'mromanek', full: 'Marek Romanek' }
-        - { name: 'jgula', full: 'Jacek Gula' }
+        - { login: 'mromanek', full: 'Marek Romanek' }
+        - { login: 'jgula', full: 'Jacek Gula' }
 
-    - name: Utworzenie grupy Kierownicy
+    - name: Utworzenie grupy Kierownicy_{{ nazwisko }}
       win_group:
         name: "Kierownicy_{{ nazwisko }}"
-        description: "Grupa szych z dostępem do projektów"
         state: present
 
-    - name: Dodanie użytkowników do grupy Kierownicy
+    - name: Dodanie użytkowników do grupy
       win_group_membership:
         name: "Kierownicy_{{ nazwisko }}"
         members:
@@ -57,32 +55,32 @@
           - jgula
         state: present
 
-    # KATALOG I UDZIAŁ SIECIOWY
-    - name: Utworzenie folderu Projekty na dysku F
+    # 4. UDZIAŁ SIECIOWY (Katalogi i Share z nazwiskiem)
+    - name: Folder Projekty na dysku F
       win_file:
-        path: F:\Projekty
+        path: 'F:\Projekty'
         state: directory
 
-    - name: Udostępnienie katalogu w sieci
+    - name: Udostępnienie katalogu jako Projekty_{{ nazwisko }}
       win_share:
         name: "Projekty_{{ nazwisko }}"
-        path: F:\Projekty
-        full: "Kierownicy_{{ nazwisko }}" # Tylko oni tu rządzą
+        path: 'F:\Projekty'
+        full: "Kierownicy_{{ nazwisko }}, BUILTIN\Administrators"
+        deny: "Everyone"
 
-    # 4. INSTALACJA WINGETEM
-    # Winget to taki "sklep" Microsoftu w konsoli - pobiera i instaluje automatycznie
-    - name: Instalacja 7zip, Dig i Firefox przez Winget
-      win_shell: "winget install {{ item }} --accept-source-agreements --accept-package-agreements"
+    # 5. INSTALACJA OPROGRAMOWANIA (Naprawa Wingeta)
+    - name: Naprawa bazy Winget i instalacja aplikacji
+      win_shell: |
+        winget source reset --force
+        winget install {{ item }} --accept-source-agreements --accept-package-agreements --silent
       loop:
         - "7zip.7zip"
-        - "ISC.BIND" # Dig jest częścią BIND
+        - "ISC.BIND"
         - "Mozilla.Firefox"
+      ignore_errors: yes
 
-    # 5. REJESTR - BLOKADA USUWANIA DRUKAREK
-    # Robimy to w kluczu HKEY_USERS (HKU), bo ma dotyczyć "nie-adminów"
-    # W praktyce najprościej ustawić to w polityce domyślnego użytkownika lub przez GPO,
-    # ale playbookowo ustawimy to w HKLM jako restrykcję ogólną (standard w Windows).
-    - name: Blokada usuwania drukarek dla zwykłych śmiertelników
+    # 6. REJESTR - BLOKADA USUWANIA DRUKAREK
+    - name: Rejestr - blokada usuwania drukarek
       win_regedit:
         path: HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer
         name: NoDeletePrinter
