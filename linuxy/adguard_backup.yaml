@@ -48,7 +48,7 @@
           shell: |
             pkill -f "AdGuardHome" || true
             sleep 2
-            nohup {{ test_restore_dir }}/adguardhome/AdGuardHome -w {{ test_restore_dir }}/adguardhome -p 3000 > /tmp/agh_test_log.txt 2>&1 &
+            cd {{ test_restore_dir }}/adguardhome && nohup ./AdGuardHome -w . -c AdGuardHome.yaml -p 3000 > /tmp/agh_test_log.txt 2>&1 &
           async: 30
           poll: 0
 
