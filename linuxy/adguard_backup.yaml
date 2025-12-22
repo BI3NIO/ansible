@@ -4,7 +4,7 @@
   become: yes
   vars:
     # Tu wpisz gdzie chcesz to trzymać na maszynie Ansible_{nazwisko}
-    backup_dest_on_ansible: "moje_backupy/{{ inventory_hostname }}_{{ ansible_date_time.date }}.tar.gz"
+    backup_dest_on_ansible: "/root/backup_agh.tar.gz"
   tasks:
     - name: "1. Sprawdzam czy katalog AdGuarda w ogóle żyje"
       stat:
