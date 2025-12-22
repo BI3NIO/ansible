@@ -9,7 +9,7 @@
     backup_dest_host: "ansible"
 
   tasks:
-    # --- CZĘŚĆ 1: BACKUP NA SERWERZE AGH ---
+    # --- CZĘŚĆ 1: BACKUP NA AGH ---
     - name: Pakowanie plikow AdGuard
       archive:
         path: "{{ agh_dir }}"
@@ -52,33 +52,40 @@
             file_type: file
           register: agh_found
 
-        - name: Uruchomienie testowe (Wymuszenie portu 3000)
+        - name: NADAWANIE UPRAWNIEN WYKONYWANIA (CHMOD +X)
+          file:
+            path: "{{ agh_found.files[0].path }}"
+            mode: '0755'
+          when: agh_found.matched > 0
+
+        - name: Uruchomienie testowe (Tryb bezpośredni)
           shell: |
             pkill -f "AdGuardHome" || true
             sleep 2
-            # Wchodzimy do folderu i odpalamy z wymuszeniem konfiguracji
-            cd {{ agh_found.files[0].path | dirname }} && nohup ./AdGuardHome -p 3000 -w . -s run > /tmp/agh_test_log.txt 2>&1 &
-          async: 30
+            cd {{ agh_found.files[0].path | dirname }}
+            # Odpalamy bezpośrednio z pełną ścieżką
+            nohup ./AdGuardHome --no-check-update -w . -p 3000 > /tmp/agh_test_log.txt 2>&1 &
+          async: 45
           poll: 0
           when: agh_found.matched > 0
 
         - name: Czekamy na port 3000
           pause:
-            seconds: 15
+            seconds: 20
 
         - name: TEST PORTU 3000
           wait_for:
             host: 127.0.0.1
             port: 3000
             state: started
-            timeout: 20
+            timeout: 25
 
         - name: Sukces
           debug:
-            msg: "WYGRANA! System wstal z backupu na porcie 3000."
+            msg: "WYGRANA! System wstal z backupu."
 
       rescue:
-        - name: Ostatnia szansa - pokaz logi startu
+        - name: Wyswietl logi binarne (jeśli powstały)
           command: "cat /tmp/agh_test_log.txt"
           register: startup_logs
           ignore_errors: yes
@@ -87,4 +94,4 @@
           debug:
             msg: 
               - "Padlo na ostatniej prostej."
-              - "Logi binarne: {{ startup_logs.stdout_lines | default('Brak logów') }}"
+              - "Logi binarne: {{ startup_logs.stdout_lines | default('Brak logów w pliku') }}"
