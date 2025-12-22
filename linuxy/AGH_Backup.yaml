@@ -2,7 +2,7 @@
 - name: Backup AdGuard Home na serwer Ansible_Bieniek
   hosts: agh
   become: yes
-  gather_facts: yes  # To musi być na yes, żeby mieć datę!
+  gather_facts: yes
 
   vars:
     backup_dest: "/backups/agh_bieniek"
@@ -10,13 +10,13 @@
   tasks:
     - name: "Blok operacyjny - Try"
       block:
-        - name: Tworzę folder na backupy na serwerze Ansible (lokalnie)
+        - name: Tworzę folder na backupy lokalnie (bez szukania sudo)
           file:
             path: "{{ backup_dest }}"
             state: directory
             mode: '0755'
           delegate_to: localhost
-          # Skoro użyszkodnik to root, to bez problemu stworzy /backups
+          become: no  # <--- To rozwiązuje błąd "sudo: not found"
 
         - name: Pakuję folder AdGuarda (RAID1) do archiwum
           archive:
@@ -36,7 +36,7 @@
             state: absent
 
       rescue:
-        - name: Wysyłanie powiadomienia na Discord (Alarm!)
+        - name: Wysyłanie powiadomienia na Discord
           community.general.discord:
             webhook_id: "1450900992336859249"
             webhook_token: !vault |
@@ -50,4 +50,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "❌ **BŁĄD BACKUPU!** Serwer AGH_Bieniek nie wysłał dzisiejszej kopii zapasowej. Sprawdź logi w Semaphore!"
+            content: "❌ Błąd podczas backupu AdGuard Home na serwerze AGH_Bieniek!"
