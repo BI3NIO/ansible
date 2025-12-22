@@ -48,11 +48,13 @@
       win_file:
         path: 'F:\Projekty'
         state: directory
-    - win_share:
+      - win_share:
         name: "Projekty_{{ nazwisko }}"
         path: 'F:\Projekty'
         full: "Kierownicy_{{ nazwisko }}"
         deny: "Everyone"
+
+    
 
     - name: Winget - Odświeżenie źródeł
       win_shell: winget source update
