@@ -1,97 +1,47 @@
 ---
-- name: Playbook 3 - Backup AdGuard Home i Live Verification
+- name: Wielka Przeprowadzka AdGuarda
   hosts: agh
   become: yes
-  vars:
-    agh_dir: "/adguardhome"
-    tmp_archive: "/tmp/agh_backup.tar.gz"
-    test_restore_dir: "/tmp/agh_test_instance"
-    backup_dest_host: "ansible"
-
   tasks:
-    # --- CZĘŚĆ 1: BACKUP NA AGH ---
-    - name: Pakowanie plikow AdGuard
+    - name: 1. Pakujemy AdGuarda w wielki worek
       archive:
-        path: "{{ agh_dir }}"
-        dest: "{{ tmp_archive }}"
+        path: /opt/adguardhome  # Ścieżka, gdzie masz zainstalowanego AdGuarda
+        dest: /tmp/adguard_backup.tar.gz
         format: gz
 
-    - name: Sciaganie backupu do kontrolera Semaphore
+    - name: 2. Wysyłamy paczkę do bazy (Ansible)
       fetch:
-        src: "{{ tmp_archive }}"
-        dest: "./agh_final_backup.tar.gz"
+        src: /tmp/adguard_backup.tar.gz
+        dest: ./backups/
         flat: yes
 
-    # --- CZĘŚĆ 2: WERYFIKACJA NA SERWERZE ANSIBLE ---
-    - name: Sekcja Weryfikacja
-      delegate_to: "{{ backup_dest_host }}"
-      become: yes
-      block:
-        - name: Przygotowanie folderu testu
-          file:
-            path: "{{ test_restore_dir }}"
-            state: directory
-            mode: '0777'
+- name: Odpalanie AdGuarda na nowym rewirze
+  hosts: localhost  # Czyli Twoja maszyna Ansible
+  become: yes
+  tasks:
+    - name: 3. Tworzymy miejsce na dane
+      file:
+        path: /opt/adguardhome_new
+        state: directory
 
-        - name: Wyslanie pliku na maszyne docelowa
-          copy:
-            src: "./agh_final_backup.tar.gz"
-            dest: "/tmp/agh_final_backup.tar.gz"
+    - name: 4. Rozpakowujemy klocki
+      unarchive:
+        src: ./backups/adguard_backup.tar.gz
+        dest: /opt/adguardhome_new
+        extra_opts: [--strip-components=1] # Żeby nie zrobił folderu w folderze
 
-        - name: Rozpakowanie backupu
-          unarchive:
-            src: "/tmp/agh_final_backup.tar.gz"
-            dest: "{{ test_restore_dir }}"
-            remote_src: yes
-
-        - name: Znajdz binarke AdGuardHome
-          find:
-            paths: "{{ test_restore_dir }}"
-            patterns: "AdGuardHome"
-            recurse: yes
-            file_type: file
-          register: agh_found
-
-        - name: NADAWANIE UPRAWNIEN WYKONYWANIA (CHMOD +X)
-          file:
-            path: "{{ agh_found.files[0].path }}"
-            mode: '0755'
-          when: agh_found.matched > 0
-
-        - name: Uruchomienie testowe (Tryb bezpośredni)
-          shell: |
-            pkill -f "AdGuardHome" || true
-            sleep 2
-            cd {{ agh_found.files[0].path | dirname }}
-            # Odpalamy bezpośrednio z pełną ścieżką
-            nohup ./AdGuardHome --no-check-update -w . -p 3000 > /tmp/agh_test_log.txt 2>&1 &
-          async: 45
-          poll: 0
-          when: agh_found.matched > 0
-
-        - name: Czekamy na port 3000
-          pause:
-            seconds: 20
-
-        - name: TEST PORTU 3000
-          wait_for:
-            host: 127.0.0.1
-            port: 3000
-            state: started
-            timeout: 25
-
-        - name: Sukces
-          debug:
-            msg: "WYGRANA! System wstal z backupu."
-
-      rescue:
-        - name: Wyswietl logi binarne (jeśli powstały)
-          command: "cat /tmp/agh_test_log.txt"
-          register: startup_logs
-          ignore_errors: yes
-
-        - name: Raport bledu
-          debug:
-            msg: 
-              - "Padlo na ostatniej prostej."
-              - "Logi binarne: {{ startup_logs.stdout_lines | default('Brak logów w pliku') }}"
+    - name: 5. Odpalamy AdGuarda (Docker to życie)
+      docker_container:
+        name: adguardhome
+        image: adguard/adguardhome
+        state: started
+        restart_policy: always
+        volumes:
+          - /opt/adguardhome_new/work:/opt/adguardhome/work
+          - /opt/adguardhome_new/conf:/opt/adguardhome/conf
+        ports:
+          - "53:53/tcp"
+          - "53:53/udp"
+          - "80:80/tcp"   # To jest Twój panel pod http://adres_ansible:80
+          - "443:443/tcp"
+          - "3000:3000/tcp"
