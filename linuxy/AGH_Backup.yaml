@@ -1,33 +1,24 @@
 ---
-- name: Backup AdGuard Home i weryfikacja (Powiadomienia tylko przy błędach)
+- name: Backup AdGuard Home i weryfikacja (Wersja Północna)
   hosts: agh
   become: yes
   gather_facts: yes
 
   vars:
-    # Zmieniamy na /tmp, bo tam każdy ma uprawnienia do zapisu
     backup_storage: "/tmp/backups_agh"
     agh_path: "/adguardhome"
     test_restore_path: "/tmp/test_recovery_agh"
 
   tasks:
-    - name: "SEKCJA 1: BACKUP"
+    - name: "--- SEKCJA 1: BACKUP NA SERWERZE AGH ---"
       block:
-        - name: Tworzę folder na backup lokalnie (na serwerze Ansible)
-          file:
-            path: "{{ backup_storage }}"
-            state: directory
-            mode: '0777'
-          delegate_to: localhost
-          become: no
-
         - name: Pakuję dane AdGuarda (RAID1)
           archive:
             path: "{{ agh_path }}"
             dest: "/tmp/agh_backup.tar.gz"
             format: gz
 
-        - name: Pobieram backup na serwer Ansible
+        - name: Pobieram backup na serwer Ansible (Semaphore)
           fetch:
             src: "/tmp/agh_backup.tar.gz"
             dest: "{{ backup_storage }}/latest_backup.tar.gz"
@@ -48,19 +39,25 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "🚨 **BŁĄD BACKUPU!** Problem z przesłaniem pliku do {{ backup_storage }}."
+            content: "🚨 **BŁĄD BACKUPU!** Coś padło na serwerze AGH."
 
-    - name: "SEKCJA 2: WERYFIKACJA"
-      delegate_to: localhost
-      become: no
+    - name: "--- SEKCJA 2: WERYFIKACJA NA SERWERZE ANSIBLE ---"
       block:
-        - name: Czyścimy i tworzymy folder testowy
+        - name: Tworzę folder na backup (lokalnie)
+          file:
+            path: "{{ backup_storage }}"
+            state: directory
+            mode: '0777'
+          delegate_to: localhost
+          become: no
+
+        - name: Czyścimy i tworzymy folder testowy (lokalnie)
           file:
             path: "{{ test_restore_path }}"
             state: "{{ item }}"
-          loop:
-            - absent
-            - directory
+          loop: [absent, directory]
+          delegate_to: localhost
+          become: no
 
         - name: Rozpakowuję backup (Symulacja Recovery)
           unarchive:
@@ -68,16 +65,22 @@
             dest: "{{ test_restore_path }}"
             remote_src: yes
             extra_opts: ['--strip-components=1']
+          delegate_to: localhost
+          become: no
 
         - name: Sprawdzam czy binarka istnieje
           stat:
             path: "{{ test_restore_path }}/AdGuardHome"
           register: check_bin
+          delegate_to: localhost
+          become: no
 
-        - name: Fail jeśli backup pusty
+        - name: Fail jeśli backup jest do bani
           fail:
             msg: "Błąd weryfikacji!"
           when: not check_bin.stat.exists
+          delegate_to: localhost
+          become: no
 
       rescue:
         - name: ALERT DISCORD - Błąd Weryfikacji
@@ -95,3 +98,5 @@
               36386532613435626466
             username: Semaphore
             content: "🚨 **BŁĄD WERYFIKACJI!** Backup pobrany, ale test w /tmp nie przeszedł."
+          delegate_to: localhost
+          become: no
