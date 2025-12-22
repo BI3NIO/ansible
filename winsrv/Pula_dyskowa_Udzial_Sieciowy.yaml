@@ -1,5 +1,5 @@
 ---
-- name: Automatyzacja Magazynu Danych - Wersja Bieniek
+- name: Automatyzacja Magazynu Danych
   hosts: winsrv
   gather_facts: yes
   vars:
