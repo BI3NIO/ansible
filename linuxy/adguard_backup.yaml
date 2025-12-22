@@ -1,0 +1,72 @@
+---
+- name: Backup AdGuard Home i pełna weryfikacja (Live Test)
+  hosts: agh
+  become: yes
+  vars:
+    agh_path: "/adguardhome"
+    backup_file: "/tmp/agh_backup.tar.gz"
+    backup_dest_host: "ansible" 
+    # Ścieżka na serwerze Ansible, gdzie postawimy "kopie-testową"
+    test_restore_dir: "/tmp/agh_test_instance"
+
+  tasks:
+    - name: "--- SEKCJA 1: BACKUP ---"
+      block:
+        - name: Pakowanie AdGuarda
+          archive:
+            path: "{{ agh_path }}"
+            dest: "{{ backup_file }}"
+            format: gz
+
+        - name: Wysyłka na serwer Ansible
+          fetch:
+            src: "{{ backup_file }}"
+            dest: "/backups/agh_backup.tar.gz"
+            flat: yes
+      rescue:
+        - name: Błąd backupu
+          debug: msg="Padło pakowanie!"
+
+    - name: "--- SEKCJA 2: LIVE RESTORE TEST ---"
+      delegate_to: "{{ backup_dest_host }}"
+      block:
+        - name: Przygotowanie folderu testowego
+          file:
+            path: "{{ test_restore_dir }}"
+            state: directory
+
+        - name: Rozpakowanie backupu do testów
+          unarchive:
+            src: "/backups/agh_backup.tar.gz"
+            dest: "{{ test_restore_dir }}"
+            remote_src: yes
+
+        - name: Zatrzymanie starej instancji testowej (jeśli działała)
+          shell: "pkill -f {{ test_restore_dir }}/adguardhome/AdGuardHome"
+          ignore_errors: yes
+
+        - name: URUCHOMIENIE ADGUARDA Z BACKUPU
+          # Odpalamy go w tle (&), żeby Ansible nie czekał w nieskończoność
+          # Używamy pełnej ścieżki do plików, które właśnie rozpakowaliśmy
+          shell: "nohup {{ test_restore_dir }}/adguardhome/AdGuardHome -w {{ test_restore_dir }}/adguardhome > /dev/null 2>&1 &"
+          async: 10
+          poll: 0
+
+        - name: Czekaj 5 sekund aż serwer "pomyśli"
+          pause:
+            seconds: 5
+
+        - name: TEST PANELU WWW (Port 3000)
+          uri:
+            url: "http://localhost:3000"
+            status_code: 200
+          register: web_test
+
+        - name: Sukces!
+          debug:
+            msg: "Panel działa! Możesz wejść na http://{{ ansible_host }}:3000 i sprawdzić go osobiście."
+
+      rescue:
+        - name: Powiadomienie o "trupiości" backupu
+          debug:
+            msg: "ALARM! Backup odtworzony, ale panel WWW nie odpowiada!"
