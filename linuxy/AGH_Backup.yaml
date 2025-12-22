@@ -45,7 +45,8 @@
 - name: Weryfikacja backupu i uruchomienie testowe
   hosts: localhost
   connection: local
-  become: yes  # Uruchamiamy jako root na Ansible, żeby binarka mogła działać
+  gather_facts: no  # <--- WYŁĄCZONE, żeby nie szukało sudo
+  become: no        # <--- WYŁĄCZONE, działamy jako zwykły użytkownik Semaphore
 
   vars:
     backup_storage: "/tmp/backups_agh"
@@ -81,10 +82,6 @@
             chdir: "{{ test_restore_path }}"
           async: 10
           poll: 0
-
-        - name: Czekam chwilę na start serwera
-          pause:
-            seconds: 5
 
       rescue:
         - name: ALERT DISCORD - Błąd Weryfikacji
