@@ -1,0 +1,90 @@
+---
+- name: Konfiguracja Puli Dyskowej i Udziału Sieciowego
+  hosts: windows
+  vars:
+    nazwisko: "Bieniek" # <--- TUTAJ WPISZ SWOJE NAZWISKO
+    haslo: "Zaq12wsx"
+
+  tasks:
+    # 1. TWORZENIE PULI DYSKOWEJ I TIERINGU
+    # Bierzemy wszystkie surowe dyski i robimy z nich jedną wielką przestrzeń
+    - name: Utworzenie Storage Pool ze wszystkich wolnych dysków
+      win_shell: |
+        $disks = Get-PhysicalDisk -CanPool $True
+        New-StoragePool -FriendlyName "Pula_{{ nazwisko }}" -StorageSubsystemFriendlyName "Windows Storage*" -PhysicalDisks $disks
+      register: pool_creation
+      ignore_errors: yes
+
+    # Ustawiamy SSD jako "turbo-napęd"
+    - name: Konfiguracja Storage Tiers (SSD jako szybka warstwa)
+      win_shell: |
+        $pool = Get-StoragePool -FriendlyName "Pula_{{ nazwisko }}"
+        New-StorageTier -StoragePoolFriendlyName $pool.FriendlyName -FriendlyName "Szybki_SSD" -MediaType SSD
+        New-StorageTier -StoragePoolFriendlyName $pool.FriendlyName -FriendlyName "Wolny_HDD" -MediaType HDD
+      ignore_errors: yes
+
+    # 2. WIRTUALNY DYSK I REFS
+    # Tworzymy dysk z "lustrem" (Mirror), żeby dane nie zginęły jak jeden padnie
+    - name: Utworzenie wirtualnego dysku (Mirroring) i formatowanie ReFS
+      win_shell: |
+        $pool = Get-StoragePool -FriendlyName "Pula_{{ nazwisko }}"
+        $vDisk = New-VirtualDisk -StoragePoolFriendlyName $pool.FriendlyName -FriendlyName "VDisk_{{ nazwisko }}" -UseMaximumSize -ResiliencySettingName Mirror -ProvisioningType Fixed
+        $vDisk | Get-Disk | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -DriveLetter F -UseMaximumSize | Format-Volume -FileSystem ReFS -NewFileSystemLabel "Dane_Firmowe"
+      ignore_errors: yes
+
+    # 3. UŻYTKOWNICY I GRUPY
+    - name: Utworzenie użytkowników Marka i Jacka
+      win_user:
+        name: "{{ item.name }}"
+        fullname: "{{ item.full }}"
+        password: "{{ haslo }}"
+        state: present
+      loop:
+        - { name: 'mromanek', full: 'Marek Romanek' }
+        - { name: 'jgula', full: 'Jacek Gula' }
+
+    - name: Utworzenie grupy Kierownicy
+      win_group:
+        name: "Kierownicy_{{ nazwisko }}"
+        description: "Grupa szych z dostępem do projektów"
+        state: present
+
+    - name: Dodanie użytkowników do grupy Kierownicy
+      win_group_membership:
+        name: "Kierownicy_{{ nazwisko }}"
+        members:
+          - mromanek
+          - jgula
+        state: present
+
+    # KATALOG I UDZIAŁ SIECIOWY
+    - name: Utworzenie folderu Projekty na dysku F
+      win_file:
+        path: F:\Projekty
+        state: directory
+
+    - name: Udostępnienie katalogu w sieci
+      win_share:
+        name: "Projekty_{{ nazwisko }}"
+        path: F:\Projekty
+        full: "Kierownicy_{{ nazwisko }}, Administrator" # Tylko oni tu rządzą
+
+    # 4. INSTALACJA WINGETEM
+    # Winget to taki "sklep" Microsoftu w konsoli - pobiera i instaluje automatycznie
+    - name: Instalacja 7zip, Dig i Firefox przez Winget
+      win_shell: "winget install {{ item }} --accept-source-agreements --accept-package-agreements"
+      loop:
+        - "7zip.7zip"
+        - "ISC.BIND" # Dig jest częścią BIND
+        - "Mozilla.Firefox"
+
+    # 5. REJESTR - BLOKADA USUWANIA DRUKAREK
+    # Robimy to w kluczu HKEY_USERS (HKU), bo ma dotyczyć "nie-adminów"
+    # W praktyce najprościej ustawić to w polityce domyślnego użytkownika lub przez GPO,
+    # ale playbookowo ustawimy to w HKLM jako restrykcję ogólną (standard w Windows).
+    - name: Blokada usuwania drukarek dla zwykłych śmiertelników
+      win_regedit:
+        path: HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer
+        name: NoDeletePrinter
+        data: 1
+        type: dword
