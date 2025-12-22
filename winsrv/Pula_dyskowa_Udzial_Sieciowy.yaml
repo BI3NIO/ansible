@@ -67,7 +67,7 @@
       win_share:
         name: "Projekty_{{ nazwisko }}"
         path: F:\Projekty
-        full: "Kierownicy_{{ nazwisko }}, BUILTIN\Administrators" # Tylko oni tu rządzą
+        full: "Kierownicy_{{ nazwisko }}" # Tylko oni tu rządzą
 
     # 4. INSTALACJA WINGETEM
     # Winget to taki "sklep" Microsoftu w konsoli - pobiera i instaluje automatycznie
