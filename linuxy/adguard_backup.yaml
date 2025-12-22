@@ -3,19 +3,29 @@
   hosts: agh
   become: yes
   vars:
-    # Ścieżka źródłowa na serwerze AGH
     agh_dir: "/adguardhome"
     tmp_archive: "/tmp/agh_backup.tar.gz"
-    
-    # Ścieżki na serwerze Ansible (kontrolerze)
     remote_backup_dir: "/tmp/backups"
-    # Gdzie postawimy testową instancję do weryfikacji
     test_restore_dir: "/tmp/agh_test_instance"
-    
-    # Nazwa hosta kontrolera w Twoim inwentarzu
     backup_dest_host: "ansible"
 
   tasks:
+    # --- NOWA SEKCJA: NAPRAWA BŁĘDU Z FILMU/SCREENA ---
+    - name: Naprawa struktury folderów na serwerze Ansible
+      delegate_to: "{{ backup_dest_host }}"
+      become: yes
+      block:
+        - name: Usuwanie błędnego pliku/folderu backups (czyszczenie)
+          file:
+            path: "{{ remote_backup_dir }}"
+            state: absent
+
+        - name: Tworzenie poprawnego folderu na backupy
+          file:
+            path: "{{ remote_backup_dir }}"
+            state: directory
+            mode: '0777'
+
     # --- CZĘŚĆ 1: ROBIENIE BACKUPU NA SERWERZE AGH ---
     - name: Sekcja Backup
       block:
@@ -29,19 +39,18 @@
           fetch:
             src: "{{ tmp_archive }}"
             dest: "{{ remote_backup_dir }}/"
-            flat: no # Zostawiamy no, bo find i tak go znajdzie, a tak jest bezpieczniej dla uprawnień
+            flat: no # To stworzy podfoldery, ale find je znajdzie
 
         - name: Sprzątanie pliku tymczasowego na AGH
           file:
             path: "{{ tmp_archive }}"
             state: absent
-
       rescue:
         - name: Powiadomienie o błędzie backupu
           debug:
-            msg: "BŁĄD KRYTYCZNY: Nie udało się spakować AdGuarda na serwerze źródłowym!"
+            msg: "BŁĄD: Nie udało się spakować AdGuarda!"
 
-    # --- CZĘŚĆ 2: WERYFIKACJA NA SERWERZE ANSIBLE (DELEGACJA) ---
+    # --- CZĘŚĆ 2: WERYFIKACJA NA SERWERZE ANSIBLE ---
     - name: Sekcja Weryfikacja Live
       delegate_to: "{{ backup_dest_host }}"
       become: yes
@@ -58,30 +67,40 @@
             msg: "Nie znaleziono pliku backupu w {{ remote_backup_dir }}!"
           when: found_backups.matched == 0
 
-        - name: Przygotowanie folderu do testowego odpalenia
+        - name: Przygotowanie folderu do testu
           file:
             path: "{{ test_restore_dir }}"
             state: directory
             mode: '0755'
 
-        - name: Rozpakowanie backupu na serwerze Ansible
+        - name: Rozpakowanie backupu
           unarchive:
             src: "{{ found_backups.files[0].path }}"
             dest: "{{ test_restore_dir }}"
             remote_src: yes
 
-        - name: Uruchomienie testowej instancji AdGuarda w tle
+        - name: Uruchomienie testowego AdGuarda
           shell: |
             pkill -f "AdGuardHome" || true
             nohup {{ test_restore_dir }}/adguardhome/AdGuardHome -w {{ test_restore_dir }}/adguardhome > /tmp/agh_test_log.txt 2>&1 &
           async: 15
           poll: 0
 
-        - name: Chwila cierpliwości (czekamy na start portu 3000)
+        - name: Czekamy na port 3000
           pause:
             seconds: 10
 
-        - name: TEST PANELU WWW - Czy strona działa?
+        - name: TEST PANELU WWW
           uri:
             url: "http://127.0.0.1:3000"
-            status_code:
+            status_code: 200
+          register: web_test
+
+        - name: Sukces
+          debug:
+            msg: "W KOŃCU! Backup zweryfikowany. Plik był w: {{ found_backups.files[0].path }}"
+
+      rescue:
+        - name: Powiadomienie o trupie
+          debug:
+            msg: "ALARM! Coś poszło nie tak przy odtwarzaniu!"
