@@ -1,13 +1,13 @@
 ---
-- name: Automatyzacja Magazynu Danych - Wersja z Nazwiskiem
+- name: Automatyzacja Magazynu Danych - Wersja z Nazwiskiem Bieniek
   hosts: winsrv
   gather_facts: yes
   vars:
-    nazwisko: "Bieniek" # <--- Tutaj wpisałem Twoje nazwisko
+    nazwisko: "Bieniek"
     haslo_userow: "Zaq12wsx"
 
   tasks:
-    # 1. TWORZENIE MAGAZYNU DANYCH (STORAGE POOL)
+    # 1. TWORZENIE MAGAZYNU DANYCH
     - name: Utworzenie Storage Pool (Pula_{{ nazwisko }})
       win_shell: |
         $disks = Get-PhysicalDisk -CanPool $True
@@ -23,7 +23,7 @@
         New-StorageTier -StoragePoolFriendlyName "Pula_{{ nazwisko }}" -FriendlyName "CapacityTier" -MediaType HDD
       failed_when: false
 
-    # 2. WIRTUALNY DYSK I REFS (LUSTRO)
+    # 2. WIRTUALNY DYSK I REFS
     - name: Utworzenie Virtual Disk i formatowanie ReFS (Litera F)
       win_shell: |
         $pool = Get-StoragePool -FriendlyName "Pula_{{ nazwisko }}"
@@ -55,7 +55,7 @@
           - jgula
         state: present
 
-    # 4. UDZIAŁ SIECIOWY (Katalogi i Share z nazwiskiem)
+    # 4. UDZIAŁ SIECIOWY
     - name: Folder Projekty na dysku F
       win_file:
         path: 'F:\Projekty'
@@ -68,13 +68,16 @@
         full: "Kierownicy_{{ nazwisko }}"
         deny: "Everyone"
 
-    # 5. INSTALACJA OPROGRAMOWANIA (Naprawa Wingeta)
+    # 5. INSTALACJA OPROGRAMOWANIA (Tutaj był błąd syntaxu!)
     - name: Naprawa bazy Winget i instalacja aplikacji
       win_shell: |
-      winget source update
-      winget install 7zip.7zip; winget install ISC.BIND; winget install Mozilla.Firefox
+        winget source update
+        winget install 7zip.7zip --accept-package-agreements --accept-source-agreements
+        winget install ISC.BIND --accept-package-agreements --accept-source-agreements
+        winget install Mozilla.Firefox --accept-package-agreements --accept-source-agreements
+      ignore_errors: yes
 
-    # 6. REJESTR - BLOKADA USUWANIA DRUKAREK
+    # 6. REJESTR
     - name: Rejestr - blokada usuwania drukarek
       win_regedit:
         path: HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer
