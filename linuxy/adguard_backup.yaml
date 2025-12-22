@@ -1,35 +1,34 @@
 ---
-- name: Playbook 3 - Backup AdGuard Home i Pewna Weryfikacja
+- name: Playbook 3 - Backup AdGuard Home i Live Verification
   hosts: agh
   become: yes
   vars:
+    # Serwer AGH
     agh_dir: "/adguardhome"
     tmp_archive: "/tmp/agh_backup.tar.gz"
-    # Adres IP serwera Ansible (kontrolera) - WPISZ SWÓJ IP JEŚLI INNY!
-    ansible_server_ip: "192.168.0.42" 
-    dest_path: "/tmp/agh_final_backup.tar.gz"
+    
+    # Maszyna testowa (Ansible)
     test_restore_dir: "/tmp/agh_test_instance"
+    backup_dest_host: "ansible"
 
   tasks:
-    - name: SEKCJA 1 - BACKUP I WYSYŁKA
-      block:
-        - name: Pakowanie AdGuarda
-          archive:
-            path: "{{ agh_dir }}"
-            dest: "{{ tmp_archive }}"
-            format: gz
+    # --- CZĘŚĆ 1: BACKUP NA AGH ---
+    - name: Pakowanie plikow AdGuard
+      archive:
+        path: "{{ agh_dir }}"
+        dest: "{{ tmp_archive }}"
+        format: gz
 
-        - name: Wysyłka przez SCP (Ominięcie problemów Semaphore)
-          # Używamy SSH, żeby wysłać plik bezpośrednio na drugą maszynę
-          shell: "scp -o StrictHostKeyChecking=no {{ tmp_archive }} root@{{ ansible_server_ip }}:{{ dest_path }}"
-          # UWAGA: To zadziała, jeśli masz wymienione klucze SSH między maszynami!
+    - name: Sciaganie backupu do folderu playbooka
+      fetch:
+        src: "{{ tmp_archive }}"
+        # To zapisze plik w folderze, w ktorym Semaphore trzyma ten projekt
+        dest: "./agh_final_backup.tar.gz"
+        flat: yes
 
-      rescue:
-        - name: Blad backupu
-          debug: msg="Nie udalo sie zrobic lub wyslac paczki"
-
-    - name: SEKCJA 2 - WERYFIKACJA NA ANSIBLE
-      delegate_to: ansible
+    # --- CZĘŚĆ 2: WERYFIKACJA NA ANSIBLE ---
+    - name: Sekcja Weryfikacja
+      delegate_to: "{{ backup_dest_host }}"
       become: yes
       block:
         - name: Przygotowanie folderu testu
@@ -38,30 +37,40 @@
             state: directory
             mode: '0777'
 
-        - name: Rozpakowanie (Teraz plik NA PEWNO tam bedzie)
+        - name: Kopiowanie pliku z kontrolera na maszyne docelowa
+          # Skoro fetch sciagnal plik na kontroler, teraz go tam wyslemy
+          copy:
+            src: "./agh_final_backup.tar.gz"
+            dest: "/tmp/agh_final_backup.tar.gz"
+
+        - name: Rozpakowanie backupu
           unarchive:
-            src: "{{ dest_path }}"
+            src: "/tmp/agh_final_backup.tar.gz"
             dest: "{{ test_restore_dir }}"
             remote_src: yes
 
-        - name: Uruchomienie testowe
+        - name: Uruchomienie testowe AdGuarda
           shell: |
             pkill -f "AdGuardHome" || true
-            nohup {{ test_restore_dir }}/adguardhome/AdGuardHome -w {{ test_restore_dir }}/adguardhome > /dev/null 2>&1 &
+            nohup {{ test_restore_dir }}/adguardhome/AdGuardHome -w {{ test_restore_dir }}/adguardhome > /tmp/agh_test_log.txt 2>&1 &
           async: 15
           poll: 0
 
-        - name: Czekamy na start
-          pause: seconds=10
+        - name: Czekamy na start (port 3000)
+          pause:
+            seconds: 12
 
         - name: TEST WWW
           uri:
             url: "http://127.0.0.1:3000"
             status_code: 200
+          register: web_test
 
         - name: Sukces
-          debug: msg="WYGRANA! System dziala po odtworzeniu."
+          debug:
+            msg: "WYGRANA! Panel WWW odpowiedzial poprawnie."
 
       rescue:
-        - name: Blad weryfikacji
-          debug: msg="Plik dojechał, ale AdGuard nie wstał!"
+        - name: Powiadomienie o bledzie
+          debug:
+            msg: "ALARM! Backup nie przeszedl testu. Sprawdz logi!"
