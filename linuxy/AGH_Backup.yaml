@@ -5,12 +5,13 @@
   gather_facts: yes
 
   vars:
+    # Ten folder musisz stworzyć ręcznie komendą wyżej!
     backup_storage: "/backups/agh_bieniek"
     agh_path: "/adguardhome"
     test_restore_path: "/tmp/test_recovery_agh"
 
   tasks:
-    - name: "SEKCJA 1: BACKUP (Z serwera AGH)"
+    - name: "SEKCJA 1: BACKUP"
       block:
         - name: Pakuję dane AdGuarda (RAID1)
           archive:
@@ -39,22 +40,19 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "🚨 **BŁĄD BACKUPU!** Nie udało się spakować lub pobrać danych z serwera AGH_Bieniek."
+            content: "🚨 **BŁĄD BACKUPU!** Serwer AGH_Bieniek nie mógł przesłać danych do /backups."
 
-    - name: "SEKCJA 2: WERYFIKACJA (Lokalnie na serwerze Ansible)"
+    - name: "SEKCJA 2: WERYFIKACJA"
       delegate_to: localhost
-      become: no
+      become: no # Ważne: nie szukamy sudo na maszynie z Semaphore
       block:
-        - name: Czyścimy stary folder testowy (jeśli istnieje)
+        - name: Czyścimy i tworzymy folder testowy
           file:
             path: "{{ test_restore_path }}"
-            state: absent
-
-        - name: Tworzę folder testowy
-          file:
-            path: "{{ test_restore_path }}"
-            state: directory
-            mode: '0755'
+            state: "{{ item }}"
+          loop:
+            - absent
+            - directory
 
         - name: Rozpakowuję backup (Symulacja Recovery)
           unarchive:
@@ -63,14 +61,14 @@
             remote_src: yes
             extra_opts: ['--strip-components=1']
 
-        - name: Sprawdzam czy plik binarny istnieje
+        - name: Sprawdzam czy binarka istnieje
           stat:
             path: "{{ test_restore_path }}/AdGuardHome"
           register: check_bin
 
-        - name: Wymuś błąd jeśli pliku nie ma (Fail fast)
+        - name: Fail jeśli backup pusty
           fail:
-            msg: "Błąd weryfikacji: Brak pliku AdGuardHome w archiwum!"
+            msg: "Błąd weryfikacji!"
           when: not check_bin.stat.exists
 
       rescue:
@@ -88,4 +86,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "🚨 **BŁĄD WERYFIKACJI!** Backup pobrany, ale archiwum jest uszkodzone lub niekompletne."
+            content: "🚨 **BŁĄD WERYFIKACJI!** Backup pobrany, ale test spójności w /tmp/test_recovery_agh nie przeszedł."
