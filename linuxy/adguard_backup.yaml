@@ -21,7 +21,7 @@
         - name: Wysyłka na serwer Ansible
           fetch:
             src: "{{ backup_file }}"
-            dest: "/backups/agh_backup.tar.gz"
+            dest: "/tmp/backups/agh_backup.tar.gz"
             flat: yes
       rescue:
         - name: Błąd backupu
