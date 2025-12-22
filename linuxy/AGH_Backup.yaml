@@ -5,21 +5,29 @@
   gather_facts: yes
 
   vars:
-    # Ten folder musisz stworzyć ręcznie komendą wyżej!
-    backup_storage: "/backups/agh_bieniek"
+    # Zmieniamy na /tmp, bo tam każdy ma uprawnienia do zapisu
+    backup_storage: "/tmp/backups_agh"
     agh_path: "/adguardhome"
     test_restore_path: "/tmp/test_recovery_agh"
 
   tasks:
     - name: "SEKCJA 1: BACKUP"
       block:
+        - name: Tworzę folder na backup lokalnie (na serwerze Ansible)
+          file:
+            path: "{{ backup_storage }}"
+            state: directory
+            mode: '0777'
+          delegate_to: localhost
+          become: no
+
         - name: Pakuję dane AdGuarda (RAID1)
           archive:
             path: "{{ agh_path }}"
             dest: "/tmp/agh_backup.tar.gz"
             format: gz
 
-        - name: Pobieram backup na serwer Ansible (Semaphore)
+        - name: Pobieram backup na serwer Ansible
           fetch:
             src: "/tmp/agh_backup.tar.gz"
             dest: "{{ backup_storage }}/latest_backup.tar.gz"
@@ -40,11 +48,11 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "🚨 **BŁĄD BACKUPU!** Serwer AGH_Bieniek nie mógł przesłać danych do /backups."
+            content: "🚨 **BŁĄD BACKUPU!** Problem z przesłaniem pliku do {{ backup_storage }}."
 
     - name: "SEKCJA 2: WERYFIKACJA"
       delegate_to: localhost
-      become: no # Ważne: nie szukamy sudo na maszynie z Semaphore
+      become: no
       block:
         - name: Czyścimy i tworzymy folder testowy
           file:
@@ -86,4 +94,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "🚨 **BŁĄD WERYFIKACJI!** Backup pobrany, ale test spójności w /tmp/test_recovery_agh nie przeszedł."
+            content: "🚨 **BŁĄD WERYFIKACJI!** Backup pobrany, ale test w /tmp nie przeszedł."
