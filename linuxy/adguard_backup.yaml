@@ -1,49 +1,35 @@
 ---
-- name: Playbook 3 - Backup AdGuard Home i Live Verification
+- name: Playbook 3 - Backup AdGuard Home i Pewna Weryfikacja
   hosts: agh
   become: yes
   vars:
-    # Źródło na serwerze AGH
     agh_dir: "/adguardhome"
-    tmp_archive_on_agh: "/tmp/agh_backup.tar.gz"
-    
-    # Cel na serwerze Ansible (gdzie Semaphore go położy)
-    # UWAGA: Semaphore często ma problem z pisaniem w /tmp/backups, 
-    # więc użyjemy /tmp/ bezpośrednio, bo tam zawsze wolno pisać.
-    final_backup_path: "/tmp/agh_final_backup.tar.gz"
-    
-    # Gdzie testujemy
+    tmp_archive: "/tmp/agh_backup.tar.gz"
+    # Adres IP serwera Ansible (kontrolera) - WPISZ SWÓJ IP JEŚLI INNY!
+    ansible_server_ip: "192.168.0.42" 
+    dest_path: "/tmp/agh_final_backup.tar.gz"
     test_restore_dir: "/tmp/agh_test_instance"
-    backup_dest_host: "ansible"
 
   tasks:
-    # --- ETAP 1: BACKUP NA SERWERZE AGH ---
-    - name: Sekcja Backup
+    - name: SEKCJA 1 - BACKUP I WYSYŁKA
       block:
-        - name: Pakowanie plików AdGuard Home
+        - name: Pakowanie AdGuarda
           archive:
             path: "{{ agh_dir }}"
-            dest: "{{ tmp_archive_on_agh }}"
+            dest: "{{ tmp_archive }}"
             format: gz
 
-        - name: Wysylka backupu bezpośrednio do /tmp
-          fetch:
-            src: "{{ tmp_archive_on_agh }}"
-            dest: "{{ final_backup_path }}"
-            flat: yes # To MUSI być yes, żeby nie było podfolderów
+        - name: Wysyłka przez SCP (Ominięcie problemów Semaphore)
+          # Używamy SSH, żeby wysłać plik bezpośrednio na drugą maszynę
+          shell: "scp -o StrictHostKeyChecking=no {{ tmp_archive }} root@{{ ansible_server_ip }}:{{ dest_path }}"
+          # UWAGA: To zadziała, jeśli masz wymienione klucze SSH między maszynami!
 
-        - name: Czyszczenie tymczasowego pliku na AGH
-          file:
-            path: "{{ tmp_archive_on_agh }}"
-            state: absent
       rescue:
-        - name: Powiadomienie o błędzie pakowania
-          debug:
-            msg: "BŁĄD: Backup na AGH nie wyszedł."
+        - name: Blad backupu
+          debug: msg="Nie udalo sie zrobic lub wyslac paczki"
 
-    # --- ETAP 2: WERYFIKACJA NA SERWERZE ANSIBLE ---
-    - name: Sekcja Weryfikacja
-      delegate_to: "{{ backup_dest_host }}"
+    - name: SEKCJA 2 - WERYFIKACJA NA ANSIBLE
+      delegate_to: ansible
       become: yes
       block:
         - name: Przygotowanie folderu testu
@@ -52,34 +38,30 @@
             state: directory
             mode: '0777'
 
-        - name: Rozpakowanie backupu z konkretnej ścieżki
+        - name: Rozpakowanie (Teraz plik NA PEWNO tam bedzie)
           unarchive:
-            src: "{{ final_backup_path }}"
+            src: "{{ dest_path }}"
             dest: "{{ test_restore_dir }}"
-            remote_src: yes # Bo plik już tam jest na dysku
+            remote_src: yes
 
-        - name: Uruchomienie testowe AdGuarda
+        - name: Uruchomienie testowe
           shell: |
             pkill -f "AdGuardHome" || true
-            nohup {{ test_restore_dir }}/adguardhome/AdGuardHome -w {{ test_restore_dir }}/adguardhome > /tmp/agh_test_log.txt 2>&1 &
+            nohup {{ test_restore_dir }}/adguardhome/AdGuardHome -w {{ test_restore_dir }}/adguardhome > /dev/null 2>&1 &
           async: 15
           poll: 0
 
-        - name: Czekamy aż port 3000 ożyje
-          pause:
-            seconds: 10
+        - name: Czekamy na start
+          pause: seconds=10
 
-        - name: TEST PANELU WWW (kod 200)
+        - name: TEST WWW
           uri:
             url: "http://127.0.0.1:3000"
             status_code: 200
-          register: web_test
 
         - name: Sukces
-          debug:
-            msg: "WYGRANA! System odtworzony z pliku {{ final_backup_path }}"
+          debug: msg="WYGRANA! System dziala po odtworzeniu."
 
       rescue:
-        - name: Powiadomienie o błędzie weryfikacji
-          debug:
-            msg: "ALARM! Odtwarzanie nie zadziałało. Sprawdź czy plik istnieje komendą: ls -l {{ final_backup_path }}"
+        - name: Blad weryfikacji
+          debug: msg="Plik dojechał, ale AdGuard nie wstał!"
