@@ -72,9 +72,9 @@
     - name: Naprawa bazy Winget i instalacja aplikacji
       win_shell: |
         winget source update
-        winget install 7zip.7zip --accept-package-agreements --accept-source-agreements
-        winget install ISC.BIND --accept-package-agreements --accept-source-agreements
-        winget install Mozilla.Firefox --accept-package-agreements --accept-source-agreements
+        winget install 7zip.7zip --silent --accept-package-agreements --accept-source-agreements
+        winget install ISC.BIND --silent --accept-package-agreements --accept-source-agreements
+        winget install Mozilla.Firefox --silent --accept-package-agreements --accept-source-agreements
       ignore_errors: yes
 
     # 6. REJESTR
