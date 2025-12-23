@@ -52,7 +52,7 @@
         name: "Projekty_{{ nazwisko }}"
         path: 'F:\Projekty'
         full: "Kierownicy_{{ nazwisko }}"
-        deny: "Everyone"
+        
 
     - name: Nadanie uprawnien NTFS dla grupy Kierownicy
       win_acl:
