@@ -51,7 +51,7 @@
     - win_share:
         name: "Projekty_{{ nazwisko }}"
         path: 'F:\Projekty'
-        full: "Kierownicy_{{ nazwisko }}"
+        full: "Kierownicy_{{ nazwisko }}, Administrators"
         
 
     - name: Nadanie uprawnien NTFS dla grupy Kierownicy
