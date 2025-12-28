@@ -1,33 +1,30 @@
 ---
-# --- ETAP 1: BACKUP Z SERWERA PRODUKCYJNEGO AGH ---
-- name: Kopia zapasowa AdGuard Home z serwera AGH
+- name: Kopia zapasowa i replikacja AdGuard Home dla AGH_Bieniek
   hosts: agh
   become: yes
-  gather_facts: yes
-
   vars:
-    backup_storage: "/tmp/backups_agh"
-    agh_path: "/adguardhome"
+    backup_path: "/tmp/agh_backup.tar.gz"
+    ansible_host_dest: "/opt/adguard_recovery_Bieniek"
 
   tasks:
-    - name: "Blok operacyjny - Backup"
+    - name: Proces Backup i Transfer
       block:
-        - name: Pakuję folder AdGuarda (RAID1)
+        - name: 1. Tworzenie paczki z danymi (Backup)
           archive:
-            path: "{{ agh_path }}"
-            dest: "/tmp/agh_backup.tar.gz"
+            path: /adguardhome/*
+            dest: "{{ backup_path }}"
             format: gz
 
-        - name: Pobieram backup na serwer Ansible (Semaphore)
+        - name: 2. Pobieranie kopii na maszynę Ansible_{nazwisko}
           fetch:
-            src: "/tmp/agh_backup.tar.gz"
-            dest: "{{ backup_storage }}/latest_backup.tar.gz"
+            src: "{{ backup_path }}"
+            dest: "/tmp/agh_from_remote.tar.gz"
             flat: yes
-      
+
       rescue:
-        - name: ALERT DISCORD - Błąd Backup
+        - name: Wysyłanie powiadomienia o błędzie backupu na Discord
           community.general.discord:
-            webhook_id: "1450900992336859249"
+            webhook_id: 1450900992336859249
             webhook_token: !vault |
               $ANSIBLE_VAULT;1.1;AES256
               37303932373334626461343363663132666666633464626634386438613066653963643364343535
@@ -39,55 +36,44 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "🚨 **BŁĄD BACKUPU!** Coś padło przy pakowaniu na serwerze AGH."
+            content: "❌ Błąd Backup/Fetch na: {{ inventory_hostname }} ({{ ansible_host }})"
 
-# --- ETAP 2: ODTWORZENIE I URUCHOMIENIE NA SERWERZE ANSIBLE (localhost) ---
-- name: Weryfikacja backupu i uruchomienie testowe
+- name: Przywracanie i uruchamianie na hoscie Ansible
   hosts: localhost
-  connection: local
-  gather_facts: no
-  become: no        # Działamy bez sudo na localhost
-
+  become: yes
   vars:
-    backup_storage: "/tmp/backups_agh"
-    test_restore_path: "/tmp/test_recovery_agh"
+    ansible_host_dest: "/opt/adguard_recovery_Bieniek"
 
   tasks:
-    - name: "Blok operacyjny - Uruchomienie Testowe"
+    - name: Proces Odtwarzania
       block:
-        - name: Zamykam stary proces testowy (ignorując błędy)
-          shell: "pkill -f AdGuardHome"
-          ignore_errors: yes
-
-        - name: Przygotowuję czysty folder testowy
+        - name: 3. Przygotowanie folderu recovery
           file:
-            path: "{{ test_restore_path }}"
-            state: "{{ item }}"
-          loop: [absent, directory]
-
-        - name: Rozpakowuję backup na localhost
-          unarchive:
-            src: "{{ backup_storage }}/latest_backup.tar.gz"
-            dest: "{{ test_restore_path }}"
-            remote_src: yes
-            extra_opts: ['--strip-components=1']
-
-        - name: Nadaję uprawnienia binarce
-          file:
-            path: "{{ test_restore_path }}/AdGuardHome"
+            path: "{{ ansible_host_dest }}"
+            state: directory
             mode: '0755'
 
-        - name: URUCHAMIAM ADGUARDA W TLE NA PORCIE 8888
-          shell: "nohup ./AdGuardHome -p 8888 > /dev/null 2>&1 &"
+        - name: 4. Rozpakowanie kopii zapasowej
+          unarchive:
+            src: "/tmp/agh_from_remote.tar.gz"
+            dest: "{{ ansible_host_dest }}"
+
+        - name: 5. Rejestracja AdGuarda jako serwisu (jeśli nie istnieje)
+          shell: "./AdGuardHome -s install -w {{ ansible_host_dest }}"
           args:
-            chdir: "{{ test_restore_path }}"
-          async: 10
-          poll: 0
+            chdir: "{{ ansible_host_dest }}"
+          failed_when: false
+
+        - name: 6. Start AdGuarda
+          service:
+            name: AdGuardHome
+            state: started
+            enabled: yes
 
       rescue:
-        - name: ALERT DISCORD - Błąd Weryfikacji
+        - name: Wysyłanie powiadomienia o błędzie odtworzenia na Discord
           community.general.discord:
-            webhook_id: "1450900992336859249"
+            webhook_id: 1450900992336859249
             webhook_token: !vault |
               $ANSIBLE_VAULT;1.1;AES256
               37303932373334626461343363663132666666633464626634386438613066653963643364343535
@@ -99,4 +85,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "🚨 **BŁĄD WERYFIKACJI!** Nie udało się odpalić AdGuarda na serwerze Ansible."
+            content: "❌ Błąd Odtwarzania AdGuard na host Ansible! Sprawdź logi."
