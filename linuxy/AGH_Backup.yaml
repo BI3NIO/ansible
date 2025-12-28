@@ -3,7 +3,6 @@
   hosts: agh
   become: yes
   vars:
-    # Poprawiona ścieżka źródłowa na podstawie Twojego wyniku 'find'
     agh_source_dir: "/opt/AdGuardHome"
     backup_path: "/tmp/agh_backup.tar.gz"
 
@@ -39,13 +38,7 @@
             dest: "{{ ansible_host_dest }}"
             remote_src: yes
 
-        - name: 5. Naprawa IP i ścieżek w pliku YAML
-          # Zamieniamy starą ścieżkę /opt/AdGuardHome na nową /opt/adguard_recovery_Bieniek
-          shell: |
-            sed -i 's|/opt/AdGuardHome|{{ ansible_host_dest }}|g' {{ ansible_host_dest }}/AdGuardHome.yaml
-            sed -i 's|bind_host: .*|bind_host: 0.0.0.0|g' {{ ansible_host_dest }}/AdGuardHome.yaml
-
-        - name: 6. Start AdGuarda z Twoimi ustawieniami
+        - name: 5. Start AdGuarda z Twoimi ustawieniami
           shell: |
             ./AdGuardHome -s uninstall
             ./AdGuardHome -s install -w {{ ansible_host_dest }} -c {{ ansible_host_dest }}/AdGuardHome.yaml
