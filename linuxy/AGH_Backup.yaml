@@ -23,7 +23,7 @@
   tasks:
     - name: Operacja odzyskiwania danych
       block:
-        - name: 3. Przygotowanie folderu docelowego
+        - nae: 3. Przygotowanie folderu docelowego
           file:
             path: "{{ ansible_host_dest }}"
             state: absent
