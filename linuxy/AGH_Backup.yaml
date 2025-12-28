@@ -4,7 +4,6 @@
   become: yes
   vars:
     backup_path: "/tmp/agh_backup.tar.gz"
-    ansible_host_dest: "/opt/adguard_recovery_Bieniek"
 
   tasks:
     - name: Proces Backup i Transfer
@@ -15,14 +14,14 @@
             dest: "{{ backup_path }}"
             format: gz
 
-        - name: 2. Pobieranie kopii na maszynę Ansible_{nazwisko}
+        - name: 2. Pobieranie kopii na maszynę Ansible_Bieniek
           fetch:
             src: "{{ backup_path }}"
             dest: "/tmp/agh_from_remote.tar.gz"
             flat: yes
 
       rescue:
-        - name: Wysyłanie powiadomienia o błędzie backupu na Discord
+        - name: Wysyłanie powiadomienia o błędzie na Discord
           community.general.discord:
             webhook_id: 1450900992336859249
             webhook_token: !vault |
@@ -36,14 +35,14 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "❌ Błąd Backup/Fetch na: {{ inventory_hostname }} ({{ ansible_host }})"
+            content: "❌ Blad Backup/Fetch na: {{ inventory_hostname }}"
 
 - name: Przywracanie i uruchamianie na hoscie Ansible
   hosts: localhost
-  become: no
-  gather_facts: no
+  become: no              # Nie używamy sudo
+  gather_facts: no        # Wyłączamy zbieranie faktów (naprawia błąd /bin/sh: sudo)
   vars:
-    ansible_host_dest: "/tmp/adguard_recovery_Bieniek"
+    ansible_host_dest: "/tmp/adguard_recovery_Bieniek" # Folder w /tmp zawsze działa
 
   tasks:
     - name: Proces Odtwarzania
@@ -59,20 +58,16 @@
             src: "/tmp/agh_from_remote.tar.gz"
             dest: "{{ ansible_host_dest }}"
 
-        - name: 5. Rejestracja AdGuarda jako serwisu (jeśli nie istnieje)
-          shell: "./AdGuardHome -s install -w {{ ansible_host_dest }}"
+        - name: 5. Uruchomienie AdGuarda jako proces w tle
+          # Uzywamy nohup, zeby AdGuard nie zdechl po zakonczeniu skryptu
+          shell: "nohup ./AdGuardHome -w {{ ansible_host_dest }} > agh_log.txt 2>&1 &"
           args:
             chdir: "{{ ansible_host_dest }}"
-          failed_when: false
-
-        - name: 6. Start AdGuarda
-          service:
-            name: AdGuardHome
-            state: started
-            enabled: yes
+          async: 10
+          poll: 0
 
       rescue:
-        - name: Wysyłanie powiadomienia o błędzie odtworzenia na Discord
+        - name: Powiadomienie o błędzie na Discord (Localhost)
           community.general.discord:
             webhook_id: 1450900992336859249
             webhook_token: !vault |
@@ -86,4 +81,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "❌ Błąd Odtwarzania AdGuard na host Ansible! Sprawdź logi."
+            content: "❌ Blad odtworzenia AdGuarda na hoscie Ansible!"
