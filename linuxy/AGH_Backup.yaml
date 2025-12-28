@@ -10,7 +10,7 @@
       shell: "tar -czf {{ backup_path }} -C /adguardhome ."
 
     - name: 2. Przeslanie pliku na serwer Ansible
-      shell: "rsync -avz -e 'ssh -o StrictHostKeyChecking=no' {{ backup_path }} ansible@192.168.0.42:/tmp/agh_from_remote.tar.gz"
+      shell: "rsync -avz -e 'ssh -o StrictHostKeyChecking=no' {{ backup_path }} root@192.168.0.42:/tmp/agh_from_remote.tar.gz"
       delegate_to: agh
 
 - name: Przywracanie i konfiguracja na hoscie Ansible
