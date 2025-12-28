@@ -40,9 +40,10 @@
 
 - name: Przywracanie i uruchamianie na hoscie Ansible
   hosts: localhost
-  become: yes
+  become: no
+  gather_facts: no
   vars:
-    ansible_host_dest: "/opt/adguard_recovery_Bieniek"
+    ansible_host_dest: "/home/user/adguard_recovery_Bieniek"
 
   tasks:
     - name: Proces Odtwarzania
