@@ -1,26 +1,27 @@
 ---
-- name: Kopia zapasowa i odtworzenie konfiguracji AGH_Bieniek
+- name: Kopia zapasowa i pełne odtworzenie AGH_Bieniek
   hosts: agh
   become: yes
   vars:
     backup_path: "/tmp/agh_backup.tar.gz"
 
   tasks:
-    - name: 1. Pakowanie samej zawartosci
+    - name: 1. Pakowanie samej zawartości (bez folderu nadrzędnego)
+      # Flaga -C zmienia katalog roboczy przed pakowaniem, dzięki czemu w archiwum nie ma folderu 'adguardhome'
       shell: "tar -czf {{ backup_path }} -C /adguardhome ."
 
-    - name: 2. Przeslanie pliku na serwer Ansible
+    - name: 2. Przesłanie pliku rsyncem na maszynę Ansible
       shell: "rsync -avz -e 'ssh -o StrictHostKeyChecking=no' {{ backup_path }} root@192.168.0.42:/tmp/agh_from_remote.tar.gz"
       delegate_to: agh
 
-- name: Przywracanie i konfiguracja na hoscie Ansible
+- name: Przywracanie i automatyczna naprawa konfiguracji
   hosts: ansible
   become: yes
   vars:
     ansible_host_dest: "/opt/adguard_recovery_Bieniek"
 
   tasks:
-    - name: Operacja odzyskiwania danych
+    - name: Proces odzyskiwania panelu sterowania
       block:
         - name: 3. Przygotowanie czystego folderu docelowego
           file:
@@ -31,19 +32,23 @@
             state: directory
             mode: '0755'
 
-        - name: 4. Rozpakowanie paczki
+        - name: 4. Rozpakowanie paczki (pliki trafią bezpośrednio do folderu)
           unarchive:
             src: "/tmp/agh_from_remote.tar.gz"
             dest: "{{ ansible_host_dest }}"
             remote_src: yes
 
-        - name: 5. MASOWA NAPRAWA ŚCIEŻEK I IP (To naprawia Setup Wizard)
-          # Używamy sed, żeby zamienić stare ścieżki /adguardhome na nowe docelowe
+        - name: 5. Naprawa ścieżek i IP w pliku yaml
+          # To zadanie sprawi, że AdGuard "rozpozna" swoje stare ustawienia w nowym miejscu
           shell: |
             sed -i 's|/adguardhome|{{ ansible_host_dest }}|g' {{ ansible_host_dest }}/AdGuardHome.yaml
             sed -i 's|bind_host: .*|bind_host: 0.0.0.0|g' {{ ansible_host_dest }}/AdGuardHome.yaml
+          args:
+            # Upewniamy się, że plik istnieje przed uruchomieniem sed
+            creates: "{{ ansible_host_dest }}/AdGuardHome.yaml"
 
-        - name: 6. Reinstalacja serwisu z wymuszeniem konfiguracji
+        - name: 6. Reinstalacja serwisu z wymuszeniem starego pliku CONFIG
+          # Używamy -c, aby wskazać binatce konkretny plik, który właśnie naprawiliśmy
           shell: |
             ./AdGuardHome -s uninstall
             ./AdGuardHome -s install -w {{ ansible_host_dest }} -c {{ ansible_host_dest }}/AdGuardHome.yaml
@@ -53,7 +58,7 @@
           failed_when: false
 
       rescue:
-        - name: Alarm Discord
+        - name: Powiadomienie o błędzie na Discord
           community.general.discord:
             webhook_id: 1450900992336859249
             webhook_token: !vault |
@@ -67,4 +72,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "❌ Kopia zapasowa AGH na hoscie ansible nie dycha prawidłowo!"
+            content: "❌ Kopia zapasowa AGH nie wczytała ustawień na hoście Ansible!"
