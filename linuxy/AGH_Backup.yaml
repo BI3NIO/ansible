@@ -43,7 +43,7 @@
   become: no
   gather_facts: no
   vars:
-    ansible_host_dest: "/home/user/adguard_recovery_Bieniek"
+    ansible_host_dest: "/tmp/adguard_recovery_Bieniek"
 
   tasks:
     - name: Proces Odtwarzania
@@ -52,7 +52,7 @@
           file:
             path: "{{ ansible_host_dest }}"
             state: directory
-            mode: '0755'
+            mode: '0777'
 
         - name: 4. Rozpakowanie kopii zapasowej
           unarchive:
