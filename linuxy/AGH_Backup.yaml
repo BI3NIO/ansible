@@ -38,7 +38,7 @@
             dest: "{{ ansible_host_dest }}"
             remote_src: yes
 
-        - name: 5. Start AdGuarda z Twoimi ustawieniami
+        - name: 5. Start AdGuarda z wcześniejszymi ustawieniami
           shell: |
             ./AdGuardHome -s uninstall
             ./AdGuardHome -s install -w {{ ansible_host_dest }} -c {{ ansible_host_dest }}/AdGuardHome.yaml
