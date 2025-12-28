@@ -36,7 +36,7 @@
           unarchive:
             src: "/tmp/agh_from_remote.tar.gz"
             dest: "{{ ansible_host_dest }}"
-            remote_src: ye
+            remote_src: yes
 
         - name: 5. Start AdGuarda z Twoimi ustawieniami
           shell: |
