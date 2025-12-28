@@ -4,24 +4,19 @@
   become: yes
   vars:
     backup_path: "/tmp/agh_backup.tar.gz"
-    ansible_host_dest: "/opt/adguard_recovery_Bieniek"
 
   tasks:
     - name: 1. Pakowanie danych na AGH (Backup)
-      archive:
+      community.general.archive:
         path: /adguardhome/*
         dest: "{{ backup_path }}"
         format: gz
 
     - name: 2. Teleportacja pliku bezpośrednio na serwer Ansible
-      # Synchronize kopiuje prosto z AGH na maszyne o nazwie 'ansible'
-      # To omija "pudełko" Semaphore!
-      community.general.synchronize:
-        src: "{{ backup_path }}"
-        dest: "/tmp/agh_from_remote.tar.gz"
-        mode: push
-      delegate_to: "{{ inventory_hostname }}"
-      register: sync_status
+      # Używamy modułu shell z rsync, bo jest mniej kapryśny w Semaphore niż synchronize
+      # Przesyłamy plik z AGH na maszynę 'ansible' (192.168.0.42)
+      shell: "rsync -avz {{ backup_path }} root@192.168.0.42:/tmp/agh_from_remote.tar.gz"
+      delegate_to: agh
 
 - name: Przywracanie i odpalenie na serwerze docelowym (ansible)
   hosts: ansible
@@ -45,7 +40,8 @@
             remote_src: yes
 
         - name: 5. Rejestracja i start AdGuarda
-          shell: "./AdGuardHome -s install -w {{ ansible_host_dest }} && systemctl start AdGuardHome"
+          # Używamy pełnej ścieżki do binarki dla pewności
+          shell: "./AdGuardHome -s install -w {{ ansible_host_dest }} && systemctl restart AdGuardHome"
           args:
             chdir: "{{ ansible_host_dest }}"
           failed_when: false
