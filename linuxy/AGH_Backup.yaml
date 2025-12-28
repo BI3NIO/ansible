@@ -1,73 +1,57 @@
 ---
-- name: Kopia zapasowa i replikacja AdGuard Home dla AGH_Bieniek
+- name: Kopia zapasowa i bezpośrednie przesłanie na hosta Ansible
   hosts: agh
   become: yes
   vars:
     backup_path: "/tmp/agh_backup.tar.gz"
+    ansible_host_dest: "/opt/adguard_recovery_Bieniek"
 
   tasks:
-    - name: Proces Backup i Transfer
-      block:
-        - name: 1. Tworzenie paczki z danymi (Backup)
-          archive:
-            path: /adguardhome/*
-            dest: "{{ backup_path }}"
-            format: gz
+    - name: 1. Pakowanie danych na AGH (Backup)
+      archive:
+        path: /adguardhome/*
+        dest: "{{ backup_path }}"
+        format: gz
 
-        - name: 2. Pobieranie kopii na maszynę Ansible_Bieniek
-          fetch:
-            src: "{{ backup_path }}"
-            dest: "/tmp/agh_from_remote.tar.gz"
-            flat: yes
+    - name: 2. Teleportacja pliku bezpośrednio na serwer Ansible
+      # Synchronize kopiuje prosto z AGH na maszyne o nazwie 'ansible'
+      # To omija "pudełko" Semaphore!
+      community.general.synchronize:
+        src: "{{ backup_path }}"
+        dest: "/tmp/agh_from_remote.tar.gz"
+        mode: push
+      delegate_to: "{{ inventory_hostname }}"
+      register: sync_status
 
-      rescue:
-        - name: Wysyłanie powiadomienia o błędzie na Discord
-          community.general.discord:
-            webhook_id: 1450900992336859249
-            webhook_token: !vault |
-              $ANSIBLE_VAULT;1.1;AES256
-              37303932373334626461343363663132666666633464626634386438613066653963643364343535
-              3137616262333132366631653336616136663835326232300a663636323263616238316434623663
-              37373232396461643230366264323465326264636534383361393136393561613834323162343637
-              6436323463366338620a643631323964656635643166353535643830653866373037663465323964
-              65633865366334326136363932643966623233633366343930643339383136656332666463616432
-              30613830376133386563633438356531653339356566643333366233356530383935623465303539
-              37323133356365626338303062386436383130333837376130356661343762363733393365343838
-              36386532613435626466
-            username: Semaphore
-            content: "❌ Blad Backup/Fetch na: {{ inventory_hostname }}"
-
-- name: Przywracanie i uruchamianie na hoscie Ansible
-  hosts: localhost
-  become: no              # Nie używamy sudo
-  gather_facts: no        # Wyłączamy zbieranie faktów (naprawia błąd /bin/sh: sudo)
+- name: Przywracanie i odpalenie na serwerze docelowym (ansible)
+  hosts: ansible
+  become: yes
   vars:
-    ansible_host_dest: "/tmp/adguard_recovery_Bieniek" # Folder w /tmp zawsze działa
+    ansible_host_dest: "/opt/adguard_recovery_Bieniek"
 
   tasks:
-    - name: Proces Odtwarzania
+    - name: Operacja na hoscie docelowym
       block:
-        - name: 3. Przygotowanie folderu recovery
+        - name: 3. Przygotowanie folderu /opt/
           file:
             path: "{{ ansible_host_dest }}"
             state: directory
-            mode: '0777'
+            mode: '0755'
 
-        - name: 4. Rozpakowanie kopii zapasowej
+        - name: 4. Wypakowanie paczki (która już tu jest w /tmp)
           unarchive:
             src: "/tmp/agh_from_remote.tar.gz"
             dest: "{{ ansible_host_dest }}"
+            remote_src: yes
 
-        - name: 5. Uruchomienie AdGuarda jako proces w tle
-          # Uzywamy nohup, zeby AdGuard nie zdechl po zakonczeniu skryptu
-          shell: "nohup ./AdGuardHome -w {{ ansible_host_dest }} > agh_log.txt 2>&1 &"
+        - name: 5. Rejestracja i start AdGuarda
+          shell: "./AdGuardHome -s install -w {{ ansible_host_dest }} && systemctl start AdGuardHome"
           args:
             chdir: "{{ ansible_host_dest }}"
-          async: 10
-          poll: 0
+          failed_when: false
 
       rescue:
-        - name: Powiadomienie o błędzie na Discord (Localhost)
+        - name: Alarm na Discordzie
           community.general.discord:
             webhook_id: 1450900992336859249
             webhook_token: !vault |
@@ -81,4 +65,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "❌ Blad odtworzenia AdGuarda na hoscie Ansible!"
+            content: "❌ Wywaliło się odtwarzanie AdGuarda na hoście {{ inventory_hostname }}!"
