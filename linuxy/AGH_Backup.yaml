@@ -1,29 +1,29 @@
 ---
-- name: Kopia zapasowa i odtworzenie konfiguracji AdGuard Home
+- name: Kopia zapasowa i przesłanie na hosta Ansible
   hosts: agh
   become: yes
   vars:
     backup_path: "/tmp/agh_backup.tar.gz"
 
   tasks:
-    - name: 1. Pakowanie danych (bez nadrzędnego folderu)
-      # Pakujemy zawartość katalogu, aby uniknąć problemów ze strukturą
+    - name: 1. Pakowanie danych (bez zbędnych folderów nadrzędnych)
+      # Wchodzimy do środka /adguardhome i pakujemy kropkę (czyli zawartość)
       shell: "tar -czf {{ backup_path }} -C /adguardhome ."
 
-    - name: 2. Przesłanie pliku na serwer Ansible
+    - name: 2. Przesłanie pliku rsyncem
       shell: "rsync -avz -e 'ssh -o StrictHostKeyChecking=no' {{ backup_path }} root@192.168.0.42:/tmp/agh_from_remote.tar.gz"
       delegate_to: agh
 
-- name: Przywracanie pełnej konfiguracji na serwerze docelowym
+- name: Przywracanie na hoscie docelowym
   hosts: ansible
   become: yes
   vars:
     ansible_host_dest: "/opt/adguard_recovery_Bieniek"
 
   tasks:
-    - name: Odtwarzanie systemu i ustawień
+    - name: Odtwarzanie konfiguracji
       block:
-        - name: 3. Przygotowanie czystego folderu
+        - name: 3. Czyszczenie i tworzenie folderu docelowego
           file:
             path: "{{ ansible_host_dest }}"
             state: absent
@@ -32,22 +32,23 @@
             state: directory
             mode: '0755'
 
-        - name: 4. Rozpakowanie paczki
+        - name: 4. Rozpakowanie paczki bezpośrednio do folderu
           unarchive:
             src: "/tmp/agh_from_remote.tar.gz"
             dest: "{{ ansible_host_dest }}"
             remote_src: yes
 
-        - name: 5. Poprawka IP w konfiguracji (wymagane do poprawnego startu)
-          # Zmieniamy bind_host na 0.0.0.0, żeby AdGuard nie szukał starego IP z serwera AGH
+        - name: 5. Poprawka adresu IP (żeby AdGuard wstał na nowym serwerze)
+          # Jeśli plik nadal nie istnieje, to zadanie zostanie pominięte bez błędu krytycznego
           replace:
             path: "{{ ansible_host_dest }}/AdGuardHome.yaml"
             regexp: 'bind_host: .*'
             replace: 'bind_host: 0.0.0.0'
-          ignore_errors: yes
+          register: ip_fix
+          failed_when: false 
 
-        - name: 6. Rejestracja i start z konkretnym plikiem konfiguracyjnym
-          # Flaga -c wskazuje plik konfiguracyjny, a -w katalog roboczy
+        - name: 6. Rejestracja i start serwisu
+          # Wymuszamy ścieżki, żeby AdGuard wiedział skąd brać dane
           shell: |
             ./AdGuardHome -s install -w {{ ansible_host_dest }} -c {{ ansible_host_dest }}/AdGuardHome.yaml
             systemctl restart AdGuardHome
@@ -56,7 +57,7 @@
           failed_when: false
 
       rescue:
-        - name: Powiadomienie Discord
+        - name: Powiadomienie o błędzie na Discord
           community.general.discord:
             webhook_id: 1450900992336859249
             webhook_token: !vault |
@@ -70,4 +71,4 @@
               37323133356365626338303062386436383130333837376130356661343762363733393365343838
               36386532613435626466
             username: Semaphore
-            content: "❌ Błąd przywracania konfiguracji AdGuard na: {{ inventory_hostname }}"
+            content: "❌ Alarm! Kopia AdGuarda nie wstała na hoście ansible."
